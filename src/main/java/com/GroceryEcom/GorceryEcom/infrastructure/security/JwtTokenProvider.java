@@ -63,10 +63,10 @@ public class JwtTokenProvider {
         log.debug("Generating {} token for user: {}", tokenType, username);
 
         return Jwts.builder()
-                .subject(username)
-                .claims(claims)
-                .issuedAt(now)
-                .expiration(expiryDate)
+                .setSubject(username)
+                .setClaims(claims)
+                .setIssuedAt(now)
+                .setExpiration(expiryDate)
                 .signWith(key, SignatureAlgorithm.HS512)
                 .compact();
     }

@@ -2,6 +2,7 @@ package com.GroceryEcom.GorceryEcom.common.config;
 
 import com.GroceryEcom.GorceryEcom.infrastructure.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -40,6 +41,7 @@ public class WebSecurityConfig {
      * Password encoder bean - BCrypt with strength 12
      */
     @Bean
+    @ConditionalOnMissingBean(PasswordEncoder.class)
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder(12);
     }

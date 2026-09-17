@@ -114,7 +114,8 @@
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
-			<optional>true</optional>
+			<version>1.18.26</version>
+			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.modelmapper</groupId>
@@ -162,6 +163,24 @@
 			<version>1.19.1</version>
 			<scope>test</scope>
 		</dependency>
+						<!-- JWT (JJWT) -->
+						<dependency>
+							<groupId>io.jsonwebtoken</groupId>
+							<artifactId>jjwt-api</artifactId>
+							<version>0.11.5</version>
+						</dependency>
+						<dependency>
+							<groupId>io.jsonwebtoken</groupId>
+							<artifactId>jjwt-impl</artifactId>
+							<version>0.11.5</version>
+							<scope>runtime</scope>
+						</dependency>
+						<dependency>
+							<groupId>io.jsonwebtoken</groupId>
+							<artifactId>jjwt-jackson</artifactId>
+							<version>0.11.5</version>
+							<scope>runtime</scope>
+						</dependency>
 	</dependencies>
 
 	<build>
@@ -179,6 +198,39 @@
 					</execution>
 				</executions>
 			</plugin>
+															<!-- Unit and integration test configuration -->
+															<plugin>
+																<groupId>org.apache.maven.plugins</groupId>
+																<artifactId>maven-surefire-plugin</artifactId>
+																<version>3.0.0</version>
+																<configuration>
+																	<includes>
+																		<include>**/*Test.java</include>
+																	</includes>
+																	<forkCount>1</forkCount>
+																	<reuseForks>true</reuseForks>
+																	<argLine>-Dspring.profiles.active=test</argLine>
+																</configuration>
+															</plugin>
+															<plugin>
+																<groupId>org.apache.maven.plugins</groupId>
+																<artifactId>maven-failsafe-plugin</artifactId>
+																<version>3.0.0</version>
+																<executions>
+																	<execution>
+																		<goals>
+																			<goal>integration-test</goal>
+																			<goal>verify</goal>
+																		</goals>
+																	</execution>
+																</executions>
+																<configuration>
+																	<includes>
+																		<include>**/*IT.java</include>
+																	</includes>
+																	<argLine>-Dspring.profiles.active=test</argLine>
+																</configuration>
+															</plugin>
 			<plugin>
 				<groupId>org.graalvm.buildtools</groupId>
 				<artifactId>native-maven-plugin</artifactId>
@@ -198,6 +250,9 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
+							<configuration>
+								<release>17</release>
+							</configuration>
 				<executions>
 					<execution>
 						<id>default-compile</id>
@@ -210,6 +265,7 @@
 								<path>
 									<groupId>org.projectlombok</groupId>
 									<artifactId>lombok</artifactId>
+									<version>1.18.26</version>
 								</path>
 							</annotationProcessorPaths>
 						</configuration>
@@ -225,6 +281,7 @@
 								<path>
 									<groupId>org.projectlombok</groupId>
 									<artifactId>lombok</artifactId>
+									<version>1.18.26</version>
 								</path>
 							</annotationProcessorPaths>
 						</configuration>
