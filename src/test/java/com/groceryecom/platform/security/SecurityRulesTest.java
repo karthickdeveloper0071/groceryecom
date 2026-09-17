@@ -1,6 +1,6 @@
 package com.groceryecom.platform.security;
 
-import com.groceryecom.platform.security.JwtTokenProvider;
+import com.groceryecom.PostgresIntegrationTest;
 import com.groceryecom.modules.identity.web.dto.AuthTokenDTO;
 import com.groceryecom.modules.identity.internal.AuthService;
 import org.junit.jupiter.api.BeforeEach;
@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -16,8 +15,10 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import java.util.List;
+import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -28,10 +29,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Verifies URL and method security rules as seen through the /api context path.
  */
 @SpringBootTest
-@ActiveProfiles("test")
-class SecurityRulesTest {
+class SecurityRulesTest extends PostgresIntegrationTest {
 
     private static final String CONTEXT_PATH = "/api";
+    private static final UUID ALICE = UUID.randomUUID();
     private static final String CHANGE_PASSWORD_BODY =
             "{\"oldPassword\":\"oldPassword1\",\"newPassword\":\"newPassword1\",\"confirmPassword\":\"newPassword1\"}";
 
@@ -75,7 +76,7 @@ class SecurityRulesTest {
 
     @Test
     void unknownEndpointReturnsNotFound() throws Exception {
-        String token = jwtTokenProvider.generateAccessToken(1L, "alice", "alice@example.com", List.of("CUSTOMER"));
+        String token = jwtTokenProvider.generateAccessToken(ALICE, "alice", "alice@example.com", List.of("CUSTOMER"));
 
         mockMvc.perform(api(get(CONTEXT_PATH + "/v1/does-not-exist")).header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
@@ -89,7 +90,7 @@ class SecurityRulesTest {
 
     @Test
     void accessTokenIsAccepted() throws Exception {
-        String token = jwtTokenProvider.generateAccessToken(1L, "alice", "alice@example.com", List.of("CUSTOMER"));
+        String token = jwtTokenProvider.generateAccessToken(ALICE, "alice", "alice@example.com", List.of("CUSTOMER"));
 
         mockMvc.perform(api(get(CONTEXT_PATH + "/v1/auth/me")).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
@@ -97,36 +98,28 @@ class SecurityRulesTest {
 
     @Test
     void refreshTokenIsRejectedAsAccessToken() throws Exception {
-        String token = jwtTokenProvider.generateRefreshToken(1L, "alice");
+        String token = jwtTokenProvider.generateRefreshToken(ALICE, "alice");
 
         mockMvc.perform(api(get(CONTEXT_PATH + "/v1/auth/me")).header("Authorization", "Bearer " + token))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void userCanChangeOwnPassword() throws Exception {
-        String token = jwtTokenProvider.generateAccessToken(1L, "alice", "alice@example.com", List.of("CUSTOMER"));
+    void changePasswordActsOnTheLoggedInUser() throws Exception {
+        String token = jwtTokenProvider.generateAccessToken(ALICE, "alice", "alice@example.com", List.of("CUSTOMER"));
 
-        mockMvc.perform(changePassword(1L, token)).andExpect(status().isOk());
+        mockMvc.perform(changePassword().header("Authorization", "Bearer " + token)).andExpect(status().isOk());
+
+        verify(authService).changePassword(ALICE, "oldPassword1", "newPassword1");
     }
 
     @Test
-    void userCannotChangeAnotherUsersPassword() throws Exception {
-        String token = jwtTokenProvider.generateAccessToken(1L, "alice", "alice@example.com", List.of("CUSTOMER"));
-
-        mockMvc.perform(changePassword(2L, token)).andExpect(status().isForbidden());
+    void changePasswordRequiresToken() throws Exception {
+        mockMvc.perform(changePassword()).andExpect(status().isUnauthorized());
     }
 
-    @Test
-    void adminCanChangeAnotherUsersPassword() throws Exception {
-        String token = jwtTokenProvider.generateAccessToken(9L, "admin", "admin@example.com", List.of("ADMIN"));
-
-        mockMvc.perform(changePassword(2L, token)).andExpect(status().isOk());
-    }
-
-    private MockHttpServletRequestBuilder changePassword(Long userId, String token) {
-        return api(post(CONTEXT_PATH + "/v1/auth/" + userId + "/change-password"))
-                .header("Authorization", "Bearer " + token)
+    private MockHttpServletRequestBuilder changePassword() {
+        return api(post(CONTEXT_PATH + "/v1/auth/change-password"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(CHANGE_PASSWORD_BODY);
     }

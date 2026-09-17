@@ -30,24 +30,33 @@ public class JwtTokenProvider {
     private Long refreshTokenExpirationMs;
 
     /**
-     * Generate JWT Access Token
+     * Access token lifetime in seconds, as reported to clients
      */
-    public String generateAccessToken(Long userId, String username, String email, List<String> roles) {
+    public long getAccessTokenExpirationSeconds() {
+        return jwtExpirationMs / 1000;
+    }
+
+    /**
+     * Generate JWT Access Token
+     * @param userId the user's public ID (never the database id)
+     */
+    public String generateAccessToken(UUID userId, String username, String email, List<String> roles) {
         return generateToken(userId, username, email, roles, jwtExpirationMs, "ACCESS");
     }
 
     /**
      * Generate JWT Refresh Token
+     * @param userId the user's public ID (never the database id)
      */
-    public String generateRefreshToken(Long userId, String username) {
-        return generateToken(userId, username, null, Collections.emptyList(), 
+    public String generateRefreshToken(UUID userId, String username) {
+        return generateToken(userId, username, null, Collections.emptyList(),
                             refreshTokenExpirationMs, "REFRESH");
     }
 
     /**
      * Generate token with custom claims
      */
-    private String generateToken(Long userId, String username, String email, 
+    private String generateToken(UUID userId, String username, String email,
                                 List<String> roles, Long expirationMs, String tokenType) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + expirationMs);
@@ -55,7 +64,7 @@ public class JwtTokenProvider {
         SecretKey key = Keys.hmacShaKeyFor(jwtSecret.getBytes());
 
         Map<String, Object> claims = new HashMap<>();
-        claims.put("userId", userId);
+        claims.put("userId", userId.toString());
         claims.put("email", email);
         claims.put("roles", roles);
         claims.put("tokenType", tokenType);
@@ -75,14 +84,10 @@ public class JwtTokenProvider {
     /**
      * Get user ID from token
      */
-    public Long getUserIdFromToken(String token) {
+    public UUID getUserIdFromToken(String token) {
         try {
             Claims claims = getAllClaimsFromToken(token);
-            Object userIdObj = claims.get("userId");
-            if (userIdObj instanceof Number) {
-                return ((Number) userIdObj).longValue();
-            }
-            return Long.parseLong(userIdObj.toString());
+            return UUID.fromString(claims.get("userId", String.class));
         } catch (ExpiredJwtException e) {
             log.warn("JWT token is expired: {}", e.getMessage());
             throw new JwtAuthenticationException("Token expired", e);

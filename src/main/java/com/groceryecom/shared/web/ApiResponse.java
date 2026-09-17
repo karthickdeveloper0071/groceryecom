@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Map;
 
 /**
@@ -27,7 +27,7 @@ public class ApiResponse<T> implements Serializable {
     private String errorCode;
     private Map<String, String> errors;
     private PaginationInfo pagination;
-    private LocalDateTime timestamp;
+    private Instant timestamp;
     private String requestId;
     private int statusCode;
 
@@ -36,7 +36,7 @@ public class ApiResponse<T> implements Serializable {
                 .success(true)
                 .data(data)
                 .statusCode(200)
-                .timestamp(LocalDateTime.now())
+                .timestamp(Instant.now())
                 .build();
     }
 
@@ -46,7 +46,7 @@ public class ApiResponse<T> implements Serializable {
                 .data(data)
                 .message(message)
                 .statusCode(200)
-                .timestamp(LocalDateTime.now())
+                .timestamp(Instant.now())
                 .build();
     }
 
@@ -56,7 +56,7 @@ public class ApiResponse<T> implements Serializable {
                 .data(data)
                 .pagination(pagination)
                 .statusCode(200)
-                .timestamp(LocalDateTime.now())
+                .timestamp(Instant.now())
                 .build();
     }
 
@@ -66,7 +66,7 @@ public class ApiResponse<T> implements Serializable {
                 .message(message)
                 .errorCode(errorCode)
                 .statusCode(statusCode)
-                .timestamp(LocalDateTime.now())
+                .timestamp(Instant.now())
                 .build();
     }
 
@@ -76,7 +76,7 @@ public class ApiResponse<T> implements Serializable {
                 .message(message)
                 .errors(errors)
                 .statusCode(statusCode)
-                .timestamp(LocalDateTime.now())
+                .timestamp(Instant.now())
                 .build();
     }
 

@@ -2,7 +2,7 @@ package com.groceryecom.platform.security;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import org.springframework.security.web.authentication.WebAuthenticationDetails;
+import java.util.UUID;
 
 import java.util.List;
 
@@ -13,7 +13,7 @@ import java.util.List;
 @Data
 @AllArgsConstructor
 public class JwtAuthenticationDetails {
-    private Long userId;
+    private UUID userId;
     private String username;
     private List<String> roles;
 }

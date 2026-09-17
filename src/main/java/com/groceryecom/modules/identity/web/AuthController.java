@@ -3,6 +3,7 @@ package com.groceryecom.modules.identity.web;
 import com.groceryecom.shared.web.ApiResponse;
 import com.groceryecom.modules.identity.web.dto.*;
 import com.groceryecom.modules.identity.internal.AuthService;
+import com.groceryecom.platform.security.JwtAuthenticationDetails;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -15,6 +16,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
 
 /**
  * Authentication Controller
@@ -126,16 +129,17 @@ public class AuthController {
 
     /**
      * Change Password
-     * Requires authentication
+     * Requires authentication; always acts on the logged-in user, so no user id
+     * appears in the URL. Admin password resets belong in the admin console.
      */
-    @PostMapping("/{userId}/change-password")
-    @PreAuthorize("isAuthenticated() and (hasRole('ADMIN') or #userId == authentication.details.userId)")
+    @PostMapping("/change-password")
+    @PreAuthorize("isAuthenticated()")
     @SecurityRequirement(name = "Bearer Authentication")
     @Operation(summary = "Change user password", description = "Change password for authenticated user")
     public ResponseEntity<ApiResponse<Void>> changePassword(
-            @PathVariable Long userId,
             @Valid @RequestBody ChangePasswordDTO changePasswordDTO) {
-        
+
+        UUID userId = ((JwtAuthenticationDetails) SecurityContextHolder.getContext().getAuthentication().getDetails()).getUserId();
         log.info("Password change request for user: {}", userId);
         authService.changePassword(userId, changePasswordDTO.getOldPassword(), changePasswordDTO.getNewPassword());
         

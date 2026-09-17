@@ -15,6 +15,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -40,7 +41,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             // Only access tokens authenticate requests; refresh tokens are for /refresh-token only
             if (token != null && jwtTokenProvider.validateToken(token) && jwtTokenProvider.isAccessToken(token)) {
-                Long userId = jwtTokenProvider.getUserIdFromToken(token);
+                UUID userId = jwtTokenProvider.getUserIdFromToken(token);
                 String username = jwtTokenProvider.getUsernameFromToken(token);
                 List<String> roles = jwtTokenProvider.getRolesFromToken(token);
 

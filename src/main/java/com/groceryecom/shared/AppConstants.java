@@ -24,12 +24,6 @@ public class AppConstants {
     public static final int DEFAULT_PAGE_SIZE = 20;
     public static final int MAX_PAGE_SIZE = 100;
 
-    // Roles
-    public static final String ROLE_ADMIN = "ADMIN";
-    public static final String ROLE_VENDOR = "VENDOR";
-    public static final String ROLE_USER = "USER";
-    public static final String ROLE_CUSTOMER = "CUSTOMER";
-
     // Order Status
     public static final String ORDER_STATUS_PENDING = "PENDING";
     public static final String ORDER_STATUS_CONFIRMED = "CONFIRMED";
@@ -72,8 +66,9 @@ public class AppConstants {
     public static final int MAX_USERNAME_LENGTH = 50;
     public static final int MIN_PRODUCT_NAME_LENGTH = 3;
     public static final int MAX_PRODUCT_DESCRIPTION_LENGTH = 2000;
-    public static final double MIN_PRODUCT_PRICE = 0.0;
-    public static final double MAX_PRODUCT_PRICE = 999999.99;
+    // Prices in the currency's smallest unit (see shared.money.Money)
+    public static final long MIN_PRODUCT_PRICE_MINOR = 0L;
+    public static final long MAX_PRODUCT_PRICE_MINOR = 99_999_999L;
 
 }
 

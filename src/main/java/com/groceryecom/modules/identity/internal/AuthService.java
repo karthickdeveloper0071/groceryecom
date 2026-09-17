@@ -1,8 +1,10 @@
 package com.groceryecom.modules.identity.internal;
 
+import com.groceryecom.modules.identity.web.dto.AuthTokenDTO;
 import com.groceryecom.modules.identity.web.dto.UserLoginDTO;
 import com.groceryecom.modules.identity.web.dto.UserRegistrationDTO;
-import com.groceryecom.modules.identity.web.dto.AuthTokenDTO;
+
+import java.util.UUID;
 
 /**
  * Authentication Service Interface
@@ -11,7 +13,7 @@ import com.groceryecom.modules.identity.web.dto.AuthTokenDTO;
 public interface AuthService {
 
     /**
-     * Register a new user
+     * Register a new customer account
      * @param registrationDTO User registration data
      * @return Authentication token response
      */
@@ -33,17 +35,17 @@ public interface AuthService {
 
     /**
      * Logout user (invalidate token)
-     * @param userId User ID
+     * @param userId User public ID
      */
-    void logout(Long userId);
+    void logout(UUID userId);
 
     /**
      * Change user password
-     * @param userId User ID
+     * @param userId User public ID
      * @param oldPassword Current password
      * @param newPassword New password
      */
-    void changePassword(Long userId, String oldPassword, String newPassword);
+    void changePassword(UUID userId, String oldPassword, String newPassword);
 
     /**
      * Request password reset
@@ -64,4 +66,3 @@ public interface AuthService {
      */
     void verifyEmail(String verificationToken);
 }
-

@@ -5,14 +5,15 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.UUID;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserResponseDTO {
-    private Long id;
+    private UUID id;
     private String username;
     private String email;
     private String firstName;
@@ -21,6 +22,6 @@ public class UserResponseDTO {
     private String role;
     private Boolean emailVerified;
     private Boolean isActive;
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 }
 

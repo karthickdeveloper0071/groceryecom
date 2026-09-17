@@ -1,14 +1,18 @@
 package com.groceryecom.modules.identity.internal;
 
-import com.groceryecom.modules.identity.internal.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
+/**
+ * Callers pass usernames and emails already normalized to lower case.
+ */
 @Repository
-public interface UserRepository extends JpaRepository<User, Long> {
+interface UserRepository extends JpaRepository<User, Long> {
+
+    Optional<User> findByPublicId(UUID publicId);
 
     Optional<User> findByUsername(String username);
 
@@ -17,9 +21,4 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByUsername(String username);
 
     boolean existsByEmail(String email);
-
-    List<User> findByRole(User.UserRole role);
-
-    Optional<User> findByUsernameOrEmail(String username, String email);
 }
-

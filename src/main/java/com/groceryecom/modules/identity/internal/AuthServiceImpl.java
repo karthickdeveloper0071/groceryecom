@@ -1,19 +1,25 @@
 package com.groceryecom.modules.identity.internal;
 
-import com.groceryecom.shared.exception.ValidationException;
-import com.groceryecom.shared.exception.UnauthorizedException;
+import com.groceryecom.modules.identity.api.Role;
+import com.groceryecom.modules.identity.api.UserRegisteredEvent;
+import com.groceryecom.modules.identity.web.dto.AuthTokenDTO;
+import com.groceryecom.modules.identity.web.dto.UserLoginDTO;
+import com.groceryecom.modules.identity.web.dto.UserRegistrationDTO;
+import com.groceryecom.modules.identity.web.dto.UserResponseDTO;
 import com.groceryecom.platform.security.JwtTokenProvider;
-import com.groceryecom.modules.identity.web.dto.*;
-import com.groceryecom.modules.identity.internal.User;
-import com.groceryecom.modules.identity.internal.UserRepository;
+import com.groceryecom.shared.exception.UnauthorizedException;
+import com.groceryecom.shared.exception.ValidationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Authentication Service Implementation
@@ -22,52 +28,51 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class AuthServiceImpl implements AuthService {
+class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final ApplicationEventPublisher events;
 
     /**
-     * Register a new user
+     * Register a new customer account.
+     * Self-registration always creates a CUSTOMER; vendor and admin accounts are
+     * created through vendor onboarding and the admin console.
      */
     @Override
     @Transactional
     public AuthTokenDTO register(UserRegistrationDTO registrationDTO) {
-        log.info("Registering new user: {}", registrationDTO.getUsername());
+        String username = normalize(registrationDTO.getUsername());
+        String email = normalize(registrationDTO.getEmail());
+        log.info("Registering new user: {}", username);
 
         // Validate input
-        if (userRepository.existsByUsername(registrationDTO.getUsername())) {
+        if (userRepository.existsByUsername(username)) {
             throw new ValidationException("Username already exists", "USERNAME_EXISTS");
         }
 
-        if (userRepository.existsByEmail(registrationDTO.getEmail())) {
+        if (userRepository.existsByEmail(email)) {
             throw new ValidationException("Email already exists", "EMAIL_EXISTS");
         }
 
         // Create new user
         User user = new User();
-        user.setUsername(registrationDTO.getUsername());
-        user.setEmail(registrationDTO.getEmail());
+        user.setUsername(username);
+        user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(registrationDTO.getPassword()));
         user.setFirstName(registrationDTO.getFirstName());
         user.setLastName(registrationDTO.getLastName());
         user.setPhoneNumber(registrationDTO.getPhoneNumber());
-
-        // Set role (default: CUSTOMER)
-        String role = registrationDTO.getRole() != null ? registrationDTO.getRole() : "CUSTOMER";
-        try {
-            user.setRole(User.UserRole.valueOf(role.toUpperCase()));
-        } catch (IllegalArgumentException e) {
-            user.setRole(User.UserRole.CUSTOMER);
-        }
-
+        user.setRole(Role.CUSTOMER);
         user.setIsActive(true);
         user.setEmailVerified(false);
 
         // Save user
         User savedUser = userRepository.save(user);
-        log.info("User registered successfully: {}", savedUser.getId());
+        log.info("User registered successfully: {}", savedUser.getPublicId());
+
+        events.publishEvent(new UserRegisteredEvent(savedUser.getPublicId(), savedUser.getEmail(), savedUser.getRole()));
 
         // Generate tokens
         return generateAuthToken(savedUser);
@@ -79,28 +84,31 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional(readOnly = true)
     public AuthTokenDTO login(UserLoginDTO loginDTO) {
-        log.info("User login attempt: {}", loginDTO.getUsername());
+        String identifier = normalize(loginDTO.getUsername());
+        log.info("User login attempt: {}", identifier);
 
-        // Find user by username or email
-        User user = userRepository.findByUsernameOrEmail(loginDTO.getUsername(), loginDTO.getUsername())
-                .orElseThrow(() -> {
-                    log.warn("Login failed - User not found: {}", loginDTO.getUsername());
-                    return new UnauthorizedException("Invalid username or password");
-                });
+        // Find user by email or username
+        Optional<User> found = identifier.contains("@")
+                ? userRepository.findByEmail(identifier)
+                : userRepository.findByUsername(identifier);
+        User user = found.orElseThrow(() -> {
+            log.warn("Login failed - User not found: {}", identifier);
+            return new UnauthorizedException("Invalid username or password");
+        });
 
         // Check if user is active
         if (!user.getIsActive()) {
-            log.warn("Login failed - User is inactive: {}", user.getId());
+            log.warn("Login failed - User is inactive: {}", user.getPublicId());
             throw new UnauthorizedException("User account is inactive");
         }
 
         // Validate password
         if (!passwordEncoder.matches(loginDTO.getPassword(), user.getPasswordHash())) {
-            log.warn("Login failed - Invalid password for user: {}", user.getId());
+            log.warn("Login failed - Invalid password for user: {}", user.getPublicId());
             throw new UnauthorizedException("Invalid username or password");
         }
 
-        log.info("User logged in successfully: {}", user.getId());
+        log.info("User logged in successfully: {}", user.getPublicId());
 
         // Generate and return tokens
         return generateAuthToken(user);
@@ -110,6 +118,7 @@ public class AuthServiceImpl implements AuthService {
      * Refresh access token using refresh token
      */
     @Override
+    @Transactional(readOnly = true)
     public AuthTokenDTO refreshToken(String refreshToken) {
         log.info("Refreshing access token");
 
@@ -123,41 +132,23 @@ public class AuthServiceImpl implements AuthService {
             throw new UnauthorizedException("Token is not a refresh token");
         }
 
-        // Extract user info from refresh token
-        Long userId = jwtTokenProvider.getUserIdFromToken(refreshToken);
-        String username = jwtTokenProvider.getUsernameFromToken(refreshToken);
-
         // Get user from database
-        User user = userRepository.findById(userId)
+        UUID userId = jwtTokenProvider.getUserIdFromToken(refreshToken);
+        User user = userRepository.findByPublicId(userId)
                 .orElseThrow(() -> new UnauthorizedException("User not found"));
 
         if (!user.getIsActive()) {
             throw new UnauthorizedException("User account is inactive");
         }
 
-        // Generate new tokens
-        String newAccessToken = jwtTokenProvider.generateAccessToken(
-                user.getId(),
-                user.getUsername(),
-                user.getEmail(),
-                Arrays.asList(user.getRole().name())
-        );
-
-        String newRefreshToken = jwtTokenProvider.generateRefreshToken(user.getId(), user.getUsername());
-
-        return AuthTokenDTO.builder()
-                .accessToken(newAccessToken)
-                .refreshToken(newRefreshToken)
-                .tokenType("Bearer")
-                .expiresIn(900L) // 15 minutes
-                .build();
+        return generateAuthToken(user);
     }
 
     /**
      * Logout user (token invalidation would be done via Redis blacklist in production)
      */
     @Override
-    public void logout(Long userId) {
+    public void logout(UUID userId) {
         log.info("User logged out: {}", userId);
         // In production, add token to Redis blacklist
     }
@@ -167,10 +158,10 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     @Transactional
-    public void changePassword(Long userId, String oldPassword, String newPassword) {
+    public void changePassword(UUID userId, String oldPassword, String newPassword) {
         log.info("User changing password: {}", userId);
 
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByPublicId(userId)
                 .orElseThrow(() -> new UnauthorizedException("User not found"));
 
         // Validate old password
@@ -183,9 +174,8 @@ public class AuthServiceImpl implements AuthService {
             throw new ValidationException("New password must be different from old password");
         }
 
-        // Update password
+        // Update password (dirty checking saves it at commit)
         user.setPasswordHash(passwordEncoder.encode(newPassword));
-        userRepository.save(user);
 
         log.info("Password changed successfully for user: {}", userId);
     }
@@ -194,15 +184,16 @@ public class AuthServiceImpl implements AuthService {
      * Request password reset
      */
     @Override
+    @Transactional(readOnly = true)
     public void requestPasswordReset(String email) {
-        log.info("Password reset requested for email: {}", email);
+        log.info("Password reset requested");
 
         // Respond the same way whether or not the email exists, so callers cannot probe for accounts
-        userRepository.findByEmail(email).ifPresentOrElse(
+        userRepository.findByEmail(normalize(email)).ifPresentOrElse(
                 user -> {
                     // In production, send reset email with token
                     // For now, just log
-                    log.info("Password reset email would be sent to user: {}", user.getId());
+                    log.info("Password reset email would be sent to user: {}", user.getPublicId());
                 },
                 () -> log.info("Password reset requested for unknown email")
         );
@@ -233,24 +224,28 @@ public class AuthServiceImpl implements AuthService {
         throw new ValidationException("Email verification functionality not yet implemented");
     }
 
+    private static String normalize(String value) {
+        return value.trim().toLowerCase(Locale.ROOT);
+    }
+
     /**
      * Generate authentication token response
      */
     private AuthTokenDTO generateAuthToken(User user) {
         String accessToken = jwtTokenProvider.generateAccessToken(
-                user.getId(),
+                user.getPublicId(),
                 user.getUsername(),
                 user.getEmail(),
-                Arrays.asList(user.getRole().name())
+                List.of(user.getRole().name())
         );
 
         String refreshToken = jwtTokenProvider.generateRefreshToken(
-                user.getId(),
+                user.getPublicId(),
                 user.getUsername()
         );
 
         UserResponseDTO userDTO = UserResponseDTO.builder()
-                .id(user.getId())
+                .id(user.getPublicId())
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .firstName(user.getFirstName())
@@ -266,9 +261,8 @@ public class AuthServiceImpl implements AuthService {
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .tokenType("Bearer")
-                .expiresIn(900L) // 15 minutes in seconds
+                .expiresIn(jwtTokenProvider.getAccessTokenExpirationSeconds())
                 .user(userDTO)
                 .build();
     }
 }
-
