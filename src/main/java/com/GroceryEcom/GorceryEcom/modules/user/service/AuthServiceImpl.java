@@ -197,12 +197,15 @@ public class AuthServiceImpl implements AuthService {
     public void requestPasswordReset(String email) {
         log.info("Password reset requested for email: {}", email);
 
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ValidationException("Email not found"));
-
-        // In production, send reset email with token
-        // For now, just log
-        log.info("Password reset email would be sent to: {}", email);
+        // Respond the same way whether or not the email exists, so callers cannot probe for accounts
+        userRepository.findByEmail(email).ifPresentOrElse(
+                user -> {
+                    // In production, send reset email with token
+                    // For now, just log
+                    log.info("Password reset email would be sent to user: {}", user.getId());
+                },
+                () -> log.info("Password reset requested for unknown email")
+        );
     }
 
     /**

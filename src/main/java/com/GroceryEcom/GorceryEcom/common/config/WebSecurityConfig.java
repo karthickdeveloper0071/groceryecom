@@ -74,20 +74,22 @@ public class WebSecurityConfig {
                 )
 
                 // Configure authorization
+                // Matchers are relative to the /api context path
                 .authorizeHttpRequests(authz -> authz
                         // Public endpoints
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/register").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/refresh-token").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/forgot-password").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/reset-password").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/v1/auth/register").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/v1/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/v1/auth/refresh-token").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/v1/auth/forgot-password").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/v1/auth/reset-password").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/v1/auth/verify-email").permitAll()
 
                         // Swagger & Actuator endpoints
-                        .requestMatchers("/api/swagger-ui/**", "/api/v3/api-docs/**", "/api/swagger-ui.html").permitAll()
-                        .requestMatchers("/api/actuator/health").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
+                        .requestMatchers("/actuator/health").permitAll()
 
                         // OAuth2 endpoints
-                        .requestMatchers("/api/v1/oauth/**").permitAll()
+                        .requestMatchers("/v1/oauth/**").permitAll()
 
                         // All other requests require authentication
                         .anyRequest().authenticated()

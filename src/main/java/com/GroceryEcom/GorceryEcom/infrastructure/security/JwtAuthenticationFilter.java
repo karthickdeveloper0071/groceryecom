@@ -38,7 +38,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             String token = extractToken(request);
 
-            if (token != null && jwtTokenProvider.validateToken(token)) {
+            // Only access tokens authenticate requests; refresh tokens are for /refresh-token only
+            if (token != null && jwtTokenProvider.validateToken(token) && jwtTokenProvider.isAccessToken(token)) {
                 Long userId = jwtTokenProvider.getUserIdFromToken(token);
                 String username = jwtTokenProvider.getUsernameFromToken(token);
                 List<String> roles = jwtTokenProvider.getRolesFromToken(token);

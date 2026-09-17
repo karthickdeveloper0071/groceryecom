@@ -21,7 +21,8 @@ import org.springframework.web.bind.annotation.*;
  * Handles user registration, login, token refresh, and password management
  */
 @RestController
-@RequestMapping("/api/v1/auth")
+// Served under the /api context path, so the public URL is /api/v1/auth
+@RequestMapping("/v1/auth")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Authentication", description = "Authentication and Authorization endpoints")
@@ -128,7 +129,7 @@ public class AuthController {
      * Requires authentication
      */
     @PostMapping("/{userId}/change-password")
-    @PreAuthorize("isAuthenticated() and (hasRole('ADMIN') or #userId.toString() == principal.name)")
+    @PreAuthorize("isAuthenticated() and (hasRole('ADMIN') or #userId == authentication.details.userId)")
     @SecurityRequirement(name = "Bearer Authentication")
     @Operation(summary = "Change user password", description = "Change password for authenticated user")
     public ResponseEntity<ApiResponse<Void>> changePassword(

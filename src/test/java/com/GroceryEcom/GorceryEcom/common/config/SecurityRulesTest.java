@@ -68,6 +68,20 @@ class SecurityRulesTest {
     }
 
     @Test
+    void apiDocsArePublic() throws Exception {
+        mockMvc.perform(api(get(CONTEXT_PATH + "/v3/api-docs")))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void unknownEndpointReturnsNotFound() throws Exception {
+        String token = jwtTokenProvider.generateAccessToken(1L, "alice", "alice@example.com", List.of("CUSTOMER"));
+
+        mockMvc.perform(api(get(CONTEXT_PATH + "/v1/does-not-exist")).header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void protectedEndpointRequiresToken() throws Exception {
         mockMvc.perform(api(get(CONTEXT_PATH + "/v1/auth/me")))
                 .andExpect(status().isUnauthorized());

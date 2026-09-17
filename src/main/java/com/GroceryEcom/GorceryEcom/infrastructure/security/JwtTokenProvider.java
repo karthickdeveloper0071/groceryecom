@@ -20,7 +20,7 @@ import java.util.*;
 @RequiredArgsConstructor
 public class JwtTokenProvider {
 
-    @Value("${jwt.secret:your-super-secret-key-change-this-in-production-minimum-256-bits}")
+    @Value("${jwt.secret}")
     private String jwtSecret;
 
     @Value("${jwt.expiration:900000}")
@@ -146,10 +146,20 @@ public class JwtTokenProvider {
      * Check if token is refresh token
      */
     public boolean isRefreshToken(String token) {
+        return hasTokenType(token, "REFRESH");
+    }
+
+    /**
+     * Check if token is access token
+     */
+    public boolean isAccessToken(String token) {
+        return hasTokenType(token, "ACCESS");
+    }
+
+    private boolean hasTokenType(String token, String expectedType) {
         try {
             Claims claims = getAllClaimsFromToken(token);
-            String tokenType = (String) claims.get("tokenType");
-            return "REFRESH".equals(tokenType);
+            return expectedType.equals(claims.get("tokenType"));
         } catch (Exception e) {
             return false;
         }
