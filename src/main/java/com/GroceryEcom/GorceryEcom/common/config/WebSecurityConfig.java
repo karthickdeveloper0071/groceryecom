@@ -2,7 +2,6 @@ package com.GroceryEcom.GorceryEcom.common.config;
 
 import com.GroceryEcom.GorceryEcom.infrastructure.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -23,7 +22,7 @@ import java.util.Collections;
 
 /**
  * Spring Security Configuration
- * Configures JWT authentication, OAuth2, and authorization
+ * Configures JWT authentication and authorization
  */
 @Configuration
 @EnableWebSecurity
@@ -41,7 +40,6 @@ public class WebSecurityConfig {
      * Password encoder bean - BCrypt with strength 12
      */
     @Bean
-    @ConditionalOnMissingBean(PasswordEncoder.class)
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder(12);
     }
@@ -96,12 +94,7 @@ public class WebSecurityConfig {
                 )
 
                 // Add JWT filter
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-
-                // OAuth2 Resource Server configuration
-                .oauth2ResourceServer(oauth2 -> oauth2
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
-                );
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -121,14 +114,6 @@ public class WebSecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
-    }
-
-    /**
-     * JWT Authentication Converter for OAuth2
-     */
-    @Bean
-    public org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter jwtAuthenticationConverter() {
-        return new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter();
     }
 }
 

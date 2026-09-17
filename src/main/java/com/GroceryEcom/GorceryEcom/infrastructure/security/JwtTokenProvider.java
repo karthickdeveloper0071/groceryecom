@@ -63,8 +63,9 @@ public class JwtTokenProvider {
         log.debug("Generating {} token for user: {}", tokenType, username);
 
         return Jwts.builder()
-                .setSubject(username)
+                // setClaims replaces all claims, so it must come before setSubject
                 .setClaims(claims)
+                .setSubject(username)
                 .setIssuedAt(now)
                 .setExpiration(expiryDate)
                 .signWith(key, SignatureAlgorithm.HS512)
