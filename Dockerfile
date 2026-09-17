@@ -25,7 +25,7 @@ RUN addgroup -g 1000 appuser && \
     adduser -D -u 1000 -G appuser appuser
 
 # Copy jar from builder stage
-COPY --from=builder /build/target/GorceryEcom-0.0.1-SNAPSHOT.jar application.jar
+COPY --from=builder /build/target/groceryecom-0.0.1-SNAPSHOT.jar application.jar
 
 # Change ownership to appuser
 RUN chown appuser:appuser application.jar

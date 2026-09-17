@@ -34,12 +34,12 @@ The system is organized into 7 independent modules:
 |-----------|-----------|---------|
 | Language | Java 21 | Latest Java features |
 | Framework | Spring Boot 4.1.0 | Application framework |
-| Database | MySQL 8.0+ | Primary data store |
+| Database | PostgreSQL 17 (PostGIS) | Primary data store, schema managed by Flyway |
+| Modules | Spring Modulith 2.1 | Module boundaries and transactional event outbox |
 | Cache | Redis 7.0+ | Session & data caching |
 | Message Queue | RabbitMQ 3.12+ | Async messaging |
-| Search Engine | Elasticsearch 8.0+ | Full-text search |
+| Search | PostgreSQL full-text search (OpenSearch later, when needed) | Product search |
 | Container | Docker | Containerization |
-| Orchestration | Kubernetes | Production deployment |
 
 ## 🚀 Quick Start
 
@@ -56,15 +56,16 @@ The system is organized into 7 independent modules:
    cd GorceryEcom
    ```
 
-2. **Start infrastructure services**
+2. **Start infrastructure services** (PostgreSQL, Redis, RabbitMQ)
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
 3. **Build the application**
    ```bash
    mvn clean install
    ```
+   Tests start their own embedded PostgreSQL, so they don't need Docker.
 
 4. **Run the application**
    ```bash
@@ -89,27 +90,20 @@ See [SETUP.md](SETUP.md) for detailed setup instructions.
 ## 🔧 Project Structure
 
 ```
-src/main/java/com/GroceryEcom/GorceryEcom/
-├── modules/                  # Feature modules (each can become a microservice)
-│   ├── user/                # User management & authentication
-│   ├── vendor/              # Vendor management
-│   ├── product/             # Product catalog
-│   ├── order/               # Order management
-│   ├── payment/             # Payment processing
-│   ├── notification/        # Notifications
-│   └── search/              # Search functionality
-├── common/                  # Cross-module utilities
-│   ├── config/             # Application configuration
-│   ├── exception/          # Exception handling
-│   ├── util/               # Utilities & DTOs
-│   ├── constants/          # Application constants
-│   └── interceptor/        # HTTP interceptors
-└── infrastructure/         # Cross-cutting concerns
-    ├── cache/              # Caching layer
-    ├── queue/              # Message queue handlers
-    ├── storage/            # File storage
-    └── security/           # Security utilities
+src/main/java/com/groceryecom/
+├── GroceryEcomApplication.java
+├── shared/                   # Shared kernel: Money, BaseEntity, ApiResponse, exceptions
+├── platform/                 # Security (JWT), error handling, cache and messaging config
+└── modules/                  # Business modules (each can become a service later)
+    └── identity/             # Accounts, roles, login, tokens
+        ├── api/              # The only package other modules may use
+        ├── internal/         # Entities, repositories, services
+        └── web/              # REST controllers and request/response DTOs
 ```
+
+Vendors, catalog, inventory, checkout, orders, payments, delivery and notifications
+follow the same `api` / `internal` / `web` layout as they are built. `ModularityTest`
+fails the build if a module uses another module's `internal` or `web` packages.
 
 ## 📊 Performance Metrics
 
