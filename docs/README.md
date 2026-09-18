@@ -104,6 +104,11 @@ Docker, how the image is built, the health-check endpoints and why readiness
 excludes Redis and RabbitMQ, the full environment-variable table, what CI does
 and does not do, and production notes.
 
+**[Database operations](development/database-operations.md)** — starting PostgreSQL,
+the owner and runtime roles and why they are split, applying and checking
+migrations, finding a slow query with `pg_stat_statements`, the tuned server
+settings, backup and restore, and a symptom-to-fix table.
+
 **[Staging](development/staging.md)** — there is no staging environment; the
 intended pipeline from CI to production, what staging must have, the `staging`
 profile and the settings that differ, and the concrete steps to create it. Every

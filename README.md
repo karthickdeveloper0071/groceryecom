@@ -18,12 +18,17 @@ Stage 1 target: 100 vendors and up to 1,000,000 customer accounts (about 20,000 
 
 ## Quick start
 
-Requirements: JDK 21 and Docker.
+Requirements: JDK 21 and Docker (Docker Desktop on Windows or macOS).
 
 ```bash
 docker compose up -d
 ./mvnw spring-boot:run
 ```
+
+That starts PostgreSQL, Redis and RabbitMQ. On the first start of an empty database
+volume, `ops/postgres/init` also creates the runtime role the API uses and the
+`pg_stat_statements` extension. If the volume is older than those scripts, reset it
+with `docker compose down -v && docker compose up -d`.
 
 Or run everything in Docker (copy `.env.example` to `.env` and set `JWT_SECRET` first):
 
@@ -70,3 +75,4 @@ another module's `contract` package.
 - [docs/architecture/module-architecture.md](docs/architecture/module-architecture.md): module layout, dependency rules, roadmap
 - [docs/architecture/adr/README.md](docs/architecture/adr/README.md): architecture decision records
 - [docs/development/deployment.md](docs/development/deployment.md): running and deploying with Docker
+- [docs/development/database-operations.md](docs/development/database-operations.md): PostgreSQL roles, migrations, slow queries, backups

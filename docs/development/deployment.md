@@ -9,6 +9,12 @@ docker compose up -d
 ./mvnw spring-boot:run
 ```
 
+On first start of an empty database volume, `ops/postgres/init` creates the
+`grocery_app` runtime role and the `pg_stat_statements` extension. A volume created
+before those files existed has no such role: `docker compose down -v && docker compose up -d`
+to start clean, or apply the scripts by hand. See
+[database operations](database-operations.md).
+
 ## Local: everything in Docker
 
 ```bash
@@ -55,8 +61,10 @@ development needs none of them.
 | Variable | Default | Notes |
 |----------|---------|-------|
 | `DB_URL` | `jdbc:postgresql://localhost:5432/grocery_ecom` | |
-| `DB_USERNAME` / `DB_PASSWORD` | `grocery` / `grocery` | |
-| `DB_POOL_SIZE` | `20` | Per app instance |
+| `DB_USERNAME` / `DB_PASSWORD` | `grocery` / `grocery` | The role the **application** connects as. Compose passes `grocery_app` to the API container and uses `DB_USERNAME` from `.env` as the owner that creates it |
+| `DB_MIGRATION_USERNAME` / `DB_MIGRATION_PASSWORD` | the application credentials | The role **Flyway** connects as; needs DDL. Set both where the roles are split ([ADR-0013](../architecture/adr/0013-least-privilege-database-roles.md)) |
+| `APP_DB_PASSWORD` | `grocery_app` | Compose only: the password the init script gives the runtime role |
+| `DB_POOL_SIZE` | `20` | Per app instance. Instances × pool size must stay under the server's `max_connections` (200 in compose) |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | `localhost` / `6379` / empty | |
 | `RABBITMQ_HOST` / `RABBITMQ_PORT` / `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` | `localhost` / `5672` / `guest` / `guest` | Configured but not used by application code yet |
 | `JWT_SECRET` | a local-only value | **Required** outside local development; at least 64 bytes. The app refuses to start with a shorter one. |
@@ -69,7 +77,8 @@ variables. In production, set at least:
 | Variable | Notes |
 |----------|-------|
 | `JWT_SECRET` | 64+ characters, from a secrets manager, different per environment |
-| `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | Managed PostgreSQL, not a container |
+| `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | Managed PostgreSQL, not a container. `DB_USERNAME` is the runtime role, not the owner |
+| `DB_MIGRATION_USERNAME`, `DB_MIGRATION_PASSWORD` | The schema owner, for Flyway. Known to the deploy step, not to the running application |
 | `REDIS_HOST`, `RABBITMQ_HOST` | Managed services |
 | `CORS_ALLOWED_ORIGINS` | Your real origins only, for example `https://shop.groceryecom.com,https://admin.groceryecom.com,https://*.groceryecom.com`. Never `*` alone. |
 | `DB_POOL_SIZE` | Keep instances × pool size below the database connection limit |
@@ -88,7 +97,7 @@ a manual step from a built image. Details of the jobs are in the
 ## Production notes
 
 - Run several instances behind a load balancer; they are stateless. `server.forward-headers-strategy` is set, so client IPs and redirects work behind a proxy.
-- Use managed PostgreSQL (backups, point-in-time recovery, a read replica), not a database container.
+- Use managed PostgreSQL (backups, point-in-time recovery, a read replica), not a database container. Create the runtime role there too, with `ops/postgres/init/01-runtime-role.sql`, and give the application only that role's credentials; the owner's belong to the deploy step alone.
 - Flyway migrations run at startup. Deploy one instance first, or run migrations as a separate step, so several instances don't race; Flyway locks, but a single-runner step is clearer.
 - Keep migrations backward compatible with the running version, so a rollback doesn't break.
 - Do not expose port 15672 (RabbitMQ console) publicly.
@@ -97,6 +106,7 @@ a manual step from a built image. Details of the jobs are in the
 ## See also
 
 - [Backend developer guide](../onboarding/backend-developer-guide.md) — local setup
+- [Database operations](database-operations.md) — roles, migrations, slow queries, backups
 - [Database standard](../engineering/database-standard.md) — migration rules, connection budget
 - [Security standard](../engineering/security-standard.md) — secrets, CORS, TLS
 - [System architecture](../architecture/system-architecture.md) — sizing and topology

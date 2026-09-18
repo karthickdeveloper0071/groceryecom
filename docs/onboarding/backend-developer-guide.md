@@ -206,6 +206,7 @@ is wrong, not the test.
 | App fails at startup: schema validation | an entity does not match the Flyway schema | fix the entity or add a migration; `ddl-auto=validate` never alters the schema |
 | App refuses to start over the JWT secret | `JWT_SECRET` is shorter than 64 bytes | generate one: `openssl rand -base64 64 \| tr -d '\n'` |
 | Connection refused on port 5432 | infrastructure not running | `docker compose up -d` |
+| `password authentication failed for user "grocery_app"` | the database volume predates `ops/postgres/init`, so the API's runtime role was never created | `docker compose down -v && docker compose up -d` (see [database operations](../development/database-operations.md)) |
 | First `verify` is very slow | PostgreSQL binaries being downloaded | expected once per machine |
 | Tests fail on data that already exists | one PostgreSQL server per JVM, so classes share a database | make your test data unique and clean it up |
 | Need a clean database | volume still holds old data | `docker compose down -v && docker compose up -d` |

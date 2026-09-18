@@ -110,14 +110,33 @@ High-volume tables (`orders`, `order_items`, payment tables, event logs) include
 partitioned by month later without rewriting the key. Adding it afterwards means
 rebuilding the table.
 
-Only add an index for a query you have. An unused index costs every write.
+Only add an index for a query you have. An unused index costs every write. Find the
+query that is actually slow with `pg_stat_statements` and read its plan before adding
+one: [database operations](../development/database-operations.md#finding-a-slow-query).
 
-## Connections
+## Connections and roles
 
 `DB_POOL_SIZE` (default 20) is **per app instance**. Instance count times pool
 size must stay under the PostgreSQL connection limit; 8 instances at 20 is 160,
-which fits a typical managed limit. Raising the pool on a running system without
-checking the server limit is how deploys fail.
+which fits a typical managed limit (and the 200 the local server is started with).
+Raising the pool on a running system without checking the server limit is how
+deploys fail.
+
+Two roles, and application code only ever gets the weaker one
+([ADR-0013](../architecture/adr/0013-least-privilege-database-roles.md)):
+
+| Role | Used by | May |
+|------|---------|-----|
+| owner (`grocery`) | Flyway migrations | create, alter and drop |
+| runtime (`grocery_app`) | the API | `SELECT`, `INSERT`, `UPDATE`, `DELETE` only |
+
+So the schema can only ever change through a migration, and an injection flaw
+cannot drop a table. A table created by hand rather than by a migration is not
+usable by the application until it is granted — which is the point.
+
+Statements from a pooled connection are cancelled after 10 seconds
+(`statement_timeout`); locks wait at most 3 seconds. Migrations run on their own
+Flyway connection, without those limits.
 
 ## Transactions and queries
 
@@ -161,4 +180,9 @@ RabbitMQ with the credentials that `application.yml` defaults to. Connect with
 `psql -h localhost -U grocery -d grocery_ecom` (password `grocery`).
 
 To start from an empty schema, remove the volume:
-`docker compose down -v && docker compose up -d`.
+`docker compose down -v && docker compose up -d`. That also re-runs
+`ops/postgres/init`, which creates the runtime role and `pg_stat_statements`.
+
+Everything operational — roles, migrations, slow queries, backups, and what to do
+when a symptom appears — is in
+[database operations](../development/database-operations.md).

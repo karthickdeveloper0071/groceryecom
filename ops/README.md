@@ -1,16 +1,32 @@
-# ops/ — local observability stack
+# ops/ — container configuration
+
+Two things live here, both mounted read-only into containers and never used by the
+application at runtime:
+
+- `postgres/init/` — database roles, privileges and extensions, run by the PostgreSQL
+  container on first initialisation of an empty data volume, and by hand on a managed
+  database. See [database operations](../docs/development/database-operations.md) and
+  [ADR-0013](../docs/architecture/adr/0013-least-privilege-database-roles.md).
+- everything else — the local observability stack, described below.
+
+| File | What it is |
+|------|------------|
+| `postgres/init/01-runtime-role.sql` | Creates `grocery_app`, the DML-only role the API connects as, and grants it rows in every current and future table. Verified by `DatabaseRolePrivilegeTest`. |
+| `postgres/init/02-runtime-role-password.sh` | Sets that role's password from `APP_DB_PASSWORD`, so no password is committed. |
+| `postgres/init/03-extensions.sql` | Creates `pg_stat_statements`, which is how a slow endpoint is traced to a statement. |
+
+## Local observability stack
 
 Configuration for the monitoring containers defined in
 `docker-compose.observability.yml`: Prometheus for metrics, Loki plus Promtail for
-logs, Grafana for the UI. Nothing in here is used by the application at runtime;
-it is all mounted read-only into containers.
+logs, Grafana for the UI.
 
 The rules about what we log and what we alert on live in
 [docs/engineering/observability-standard.md](../docs/engineering/observability-standard.md).
 The reasoning behind this choice of tools is
 [ADR-0009](../docs/architecture/adr/0009-observability-stack.md).
 
-## Files
+## Observability files
 
 | File | What it is |
 |------|------------|
