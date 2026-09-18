@@ -28,6 +28,20 @@ envelope is in
 | POST | `/api/v1/auth/change-password` | bearer token | 200 (ends every session) |
 | POST | `/api/v1/auth/logout` | bearer token | 200 (this device; send the refresh token in the body) |
 | POST | `/api/v1/auth/logout-all` | bearer token | 200 (every device) |
+| POST | `/api/v1/vendors` | bearer token | 201 (store applies; starts PENDING) |
+| GET | `/api/v1/vendors/me` | bearer token | 200 (the caller's own stores, any status) |
+| GET | `/api/v1/vendors/{vendorId}` | public | 200 (approved stores only; 404 otherwise) |
+| PATCH | `/api/v1/vendors/{vendorId}` | bearer token, store owner | 200 |
+| POST | `/api/v1/vendors/{vendorId}/approve` | bearer token, `ADMIN` | 200 |
+| POST | `/api/v1/vendors/{vendorId}/reject` | bearer token, `ADMIN` | 200 (reason required) |
+| POST | `/api/v1/vendors/{vendorId}/suspend` | bearer token, `ADMIN` | 200 (reason required) |
+
+Two kinds of authorisation appear in that table, and they are not interchangeable.
+`ADMIN` is a role, checked with `@PreAuthorize`. "store owner" is a **membership**,
+checked inside the service through `VendorScope`, because a role cannot express
+"this store and no other" ([ADR-0014](../architecture/adr/0014-vendor-data-isolation.md)).
+Accessing a store the caller has no membership for returns **404, not 403**: a 403
+would confirm that the store exists.
 
 OpenAPI: `/api/swagger-ui.html` and `/api/v3/api-docs`.
 
@@ -122,6 +136,9 @@ API version.
 | `CONCURRENT_MODIFICATION` | 409 | optimistic lock failure; reload and retry |
 | `IDEMPOTENT_REQUEST_IN_PROGRESS` | 409 | same `Idempotency-Key` is still being processed |
 | `RATE_LIMITED` | 429 | too many requests; a `Retry-After` header says when to retry |
+| `VENDOR_ALREADY_OWNED` | 409 | the account already belongs to a store |
+| `VENDOR_SLUG_EXISTS` | 409 | the storefront address is taken |
+| `INVALID_VENDOR_STATUS_TRANSITION` | 409 | e.g. approving a rejected store, or suspending a pending one |
 
 Adding a business code: define it where the exception is thrown, add a row to
 this table in the same pull request, and use `SCREAMING_SNAKE_CASE`.

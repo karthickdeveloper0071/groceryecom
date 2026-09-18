@@ -70,6 +70,22 @@ public class AuditLog {
         record(AuditAction.ALL_SESSIONS_REVOKED, userId, Outcome.SUCCESS, "");
     }
 
+    /** An account applied to open a store. The store cannot sell until an admin approves it. */
+    public void vendorRegistered(UUID userId, UUID vendorId) {
+        record(AuditAction.VENDOR_REGISTERED, userId, Outcome.SUCCESS, "vendor=" + vendorId);
+    }
+
+    /**
+     * An admin approved, rejected or suspended a store. Who decided, and why, is asked
+     * long afterwards by somebody who was not there.
+     *
+     * @param reason the admin's words for a rejection or a suspension; null for an approval
+     */
+    public void vendorStatusChanged(UUID adminId, UUID vendorId, String status, String reason) {
+        record(AuditAction.VENDOR_STATUS_CHANGED, adminId, Outcome.SUCCESS,
+                "vendor=%s status=%s%s".formatted(vendorId, status, reason == null ? "" : " reason=" + reason));
+    }
+
     /**
      * A refresh token was presented twice. Either it leaked or a client is buggy; both are
      * worth investigating, so this is recorded as a failure.
@@ -97,7 +113,9 @@ public class AuditLog {
         PASSWORD_CHANGED,
         LOGGED_OUT,
         SESSION_REVOKED,
-        ALL_SESSIONS_REVOKED
+        ALL_SESSIONS_REVOKED,
+        VENDOR_REGISTERED,
+        VENDOR_STATUS_CHANGED
     }
 
     public enum Outcome {

@@ -48,7 +48,19 @@ public class SecurityConfig {
 
     private static final String[] PUBLIC_GET_ENDPOINTS = {
             "/actuator/health", "/actuator/health/**", "/actuator/info",
-            "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**"
+            "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**",
+            // A store's shop window, which a customer sees before signing in. One path
+            // segment only, so /v1/vendors/{id}/anything stays authenticated; the service
+            // returns approved stores and nothing else.
+            "/v1/vendors/*"
+    };
+
+    /**
+     * Paths that a pattern in {@link #PUBLIC_GET_ENDPOINTS} would otherwise open up.
+     * Matched first, so the more specific rule wins. Covered by {@code SecurityRulesTest}.
+     */
+    private static final String[] AUTHENTICATED_BEFORE_PUBLIC = {
+            "/v1/vendors/me"
     };
 
     /**
@@ -98,6 +110,9 @@ public class SecurityConfig {
                         .accessDeniedHandler((request, response, ex) -> writeError(jsonMapper, response,
                                 HttpServletResponse.SC_FORBIDDEN, "ACCESS_DENIED", "Access denied")))
                 .authorizeHttpRequests(authorize -> authorize
+                        // Before the public list: /v1/vendors/* would otherwise match /me,
+                        // which is the caller's own stores and must never be anonymous.
+                        .requestMatchers(HttpMethod.GET, AUTHENTICATED_BEFORE_PUBLIC).authenticated()
                         .requestMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
                         .requestMatchers(METRICS_FROM_PRIVATE_NETWORK).permitAll()

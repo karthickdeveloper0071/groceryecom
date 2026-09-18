@@ -111,7 +111,7 @@ invisible to the checks, which is the most common way to accidentally escape the
 | Module | Status | Owns |
 |--------|--------|------|
 | `identity` | Built | users, roles, tokens |
-| `vendor` | Planned | vendors, staff membership, KYC, bank accounts, commission plans |
+| `vendor` | Built | vendors, membership, approval; KYC, bank accounts and commission plans still to come |
 | `catalog` | Planned | categories, products, SKUs, images, prices |
 | `inventory` | Planned | stock levels, reservations, stock movements |
 | `checkout` | Planned | carts (Redis), checkout sessions |
@@ -120,8 +120,8 @@ invisible to the checks, which is the most common way to accidentally escape the
 | `delivery` | Planned | addresses, delivery zones (PostGIS), slots, shipments |
 | `notification` | Planned | templates, delivery log (events only, no public contract) |
 
-Only `identity` exists. Everything marked Planned is a name and a scope, nothing
-more — do not assume any of its code, tables or endpoints exist.
+Only `identity` and `vendor` exist. Everything marked Planned is a name and a
+scope, nothing more — do not assume any of its code, tables or endpoints exist.
 
 ## The identity module today
 
@@ -139,6 +139,34 @@ Users carry two identifiers: a `BIGINT` identity primary key that never leaves t
 database, and a random `public_id` UUID used in URLs, API responses and token
 subjects. Usernames and emails are stored lower-case with unique constraints and
 `CHECK (x = lower(x))` guards in `V1__identity_create_users.sql`.
+
+## The vendor module today
+
+What it does: an account applies to open a store, the store's owner manages its
+profile, and an admin approves, rejects or suspends it. Only an approved store
+appears on the storefront, and only an approved store will be allowed to sell.
+
+Access to a store's data is decided by **membership**, not by the account's role.
+`vendor_members` maps a user to a store as `OWNER` or `STAFF`; a user with no row
+there has no access to that store at all. Every vendor-scoped request goes through
+`VendorScope`, which looks up the membership and the store together, and returns
+404 — not 403 — when there is none, so ids cannot be probed. That rule is
+[ADR-0014](adr/0014-vendor-data-isolation.md), and
+`VendorIsolationIntegrationTest` fails the build if it is bypassed.
+
+Its `contract` package publishes `VendorStatus`, `VendorMemberRole`,
+`VendorRegisteredEvent`, `VendorStatusChangedEvent` and `VendorDirectory` — the
+interface every later module uses to ask "may this store trade?" and "what is this
+user to this store?". Catalog, inventory, order and payment will use that and
+nothing else of this module.
+
+The membership row points at the identity module's `public_id`, with no foreign
+key to `users`: modules are joined by what a module publishes, never by another
+module's internal key. The cost (a deleted account can leave a membership behind)
+is recorded in the ADR.
+
+Not built yet: staff invitations, KYC documents, bank accounts and commission
+plans.
 
 ## Adding a module
 
