@@ -3,120 +3,83 @@ package com.groceryecom.platform.web;
 import com.groceryecom.shared.exception.ApplicationException;
 import com.groceryecom.shared.web.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
+import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
-import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.UUID;
 
 /**
- * Global Exception Handler for all REST controllers
+ * Turns every exception into the standard {@link ApiResponse} error body.
+ * Extending {@link ResponseEntityExceptionHandler} gives the correct status for all
+ * standard Spring MVC errors (400, 404, 405, 406, 415, ...); this class only
+ * replaces the body.
  */
-@RestControllerAdvice
 @Slf4j
-public class GlobalExceptionHandler {
+@RestControllerAdvice
+public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(ApplicationException.class)
-    public ResponseEntity<ApiResponse<?>> handleApplicationException(
-            ApplicationException ex, WebRequest request) {
-
-        log.error("Application Exception: {}", ex.getMessage(), ex);
-
-        ApiResponse<?> response = ApiResponse.builder()
-                .success(false)
-                .message(ex.getMessage())
-                .errorCode(ex.getErrorCode())
-                .statusCode(ex.getStatusCode())
-                .requestId(generateRequestId())
-                .build();
-
-        return new ResponseEntity<>(response,
-            HttpStatus.resolve(ex.getStatusCode()) != null ?
-            HttpStatus.resolve(ex.getStatusCode()) : HttpStatus.INTERNAL_SERVER_ERROR);
+    public ResponseEntity<ApiResponse<Void>> handleApplicationException(ApplicationException ex) {
+        log.debug("Request failed: {} ({})", ex.getMessage(), ex.getErrorCode());
+        return ResponseEntity.status(ex.getStatusCode()).body(ApiResponse.error(ex.getErrorCode(), ex.getMessage()));
     }
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<?>> handleValidationException(
-            MethodArgumentNotValidException ex, WebRequest request) {
-
-        Map<String, String> errors = new HashMap<>();
-        ex.getBindingResult().getAllErrors().forEach(error -> {
-            String fieldName = ((FieldError) error).getField();
-            String errorMessage = error.getDefaultMessage();
-            errors.put(fieldName, errorMessage);
-        });
-
-        ApiResponse<?> response = ApiResponse.builder()
-                .success(false)
-                .message("Validation failed")
-                .errorCode("VALIDATION_ERROR")
-                .errors(errors)
-                .statusCode(400)
-                .requestId(generateRequestId())
-                .build();
-
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
-    }
-
+    /** Thrown by method security (@PreAuthorize) after the request reached a controller. */
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ApiResponse<?>> handleAccessDeniedException(
-            AccessDeniedException ex, WebRequest request) {
-
-        log.warn("Access denied: {}", ex.getMessage());
-
-        ApiResponse<?> response = ApiResponse.builder()
-                .success(false)
-                .message("Access Denied")
-                .errorCode("ACCESS_DENIED")
-                .statusCode(403)
-                .requestId(generateRequestId())
-                .build();
-
-        return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
-    }
-
-    @ExceptionHandler(NoHandlerFoundException.class)
-    public ResponseEntity<ApiResponse<?>> handleNoHandlerFoundException(
-            NoHandlerFoundException ex, WebRequest request) {
-
-        ApiResponse<?> response = ApiResponse.builder()
-                .success(false)
-                .message("Endpoint not found")
-                .errorCode("NOT_FOUND")
-                .statusCode(404)
-                .requestId(generateRequestId())
-                .build();
-
-        return new ResponseEntity<>(response, HttpStatus.NOT_FOUND);
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("ACCESS_DENIED", "Access denied"));
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<?>> handleGlobalException(
-            Exception ex, WebRequest request) {
-
-        log.error("Unexpected error occurred", ex);
-
-        ApiResponse<?> response = ApiResponse.builder()
-                .success(false)
-                .message("An unexpected error occurred")
-                .errorCode("INTERNAL_SERVER_ERROR")
-                .statusCode(500)
-                .requestId(generateRequestId())
-                .build();
-
-        return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
+    public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception ex) {
+        log.error("Unexpected error", ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error("INTERNAL_ERROR", "An unexpected error occurred"));
     }
 
-    private String generateRequestId() {
-        return UUID.randomUUID().toString();
+    @Override
+    protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex,
+                                                                  HttpHeaders headers, HttpStatusCode status,
+                                                                  WebRequest request) {
+        Map<String, String> errors = new LinkedHashMap<>();
+        for (ObjectError error : ex.getBindingResult().getAllErrors()) {
+            String field = error instanceof FieldError fieldError ? fieldError.getField() : error.getObjectName();
+            errors.putIfAbsent(field, error.getDefaultMessage());
+        }
+        return ResponseEntity.badRequest().headers(headers).body(ApiResponse.validationFailed(errors));
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
+                                                                  HttpHeaders headers, HttpStatusCode status,
+                                                                  WebRequest request) {
+        return ResponseEntity.badRequest().headers(headers)
+                .body(ApiResponse.error("MALFORMED_REQUEST", "Request body is missing or is not valid JSON"));
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body, HttpHeaders headers,
+                                                             HttpStatusCode statusCode, WebRequest request) {
+        HttpStatus status = HttpStatus.resolve(statusCode.value());
+        String errorCode = status != null ? status.name() : "HTTP_" + statusCode.value();
+        String message = status != null ? status.getReasonPhrase() : "Request failed";
+        if (statusCode.is5xxServerError()) {
+            log.error("Request failed with {}", statusCode, ex);
+        } else {
+            log.debug("Request failed with {}: {}", statusCode, ex.getMessage());
+        }
+        return ResponseEntity.status(statusCode).headers(headers).body(ApiResponse.error(errorCode, message));
     }
 }
-

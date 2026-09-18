@@ -1,0 +1,103 @@
+# Defaults work with docker-compose.yml for local development.
+# Every secret or environment-specific value can be overridden with an environment variable.
+
+spring:
+  application:
+    name: groceryecom
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/grocery_ecom}
+    username: ${DB_USERNAME:grocery}
+    password: ${DB_PASSWORD:grocery}
+    hikari:
+      # Per app instance: 8 instances x 20 = 160 connections, within a typical managed Postgres limit
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+      minimum-idle: 5
+      connection-timeout: 30000 # ms (Hikari takes plain milliseconds)
+      max-lifetime: 1800000 # ms
+
+  jpa:
+    # Flyway owns the schema (db/migration); Hibernate only checks that entities match it
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+
+  cache:
+    type: redis
+    redis:
+      time-to-live: 1h
+      key-prefix: "ecom:"
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+
+  jackson:
+    default-property-inclusion: non_null
+    time-zone: UTC
+
+  web:
+    resources:
+      # Pure API: unknown paths return a JSON 404 instead of looking for static files
+      add-mappings: false
+
+  modulith:
+    # Only packages annotated with @ApplicationModule are modules (shared, platform, modules.*)
+    detection-strategy: explicitly-annotated
+    events:
+      # Remove outbox entries once every listener has handled the event
+      completion-mode: delete
+
+server:
+  port: ${PORT:8080}
+  servlet:
+    context-path: /api
+  # Never leak internals in error responses; GlobalExceptionHandler builds the body
+  error:
+    include-message: never
+    include-stacktrace: never
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.groceryecom: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{requestId:-}] %logger{36} - %msg%n"
+
+app:
+  security:
+    jwt:
+      # Must be at least 64 bytes (HS512). Set JWT_SECRET in every shared or production environment.
+      secret: ${JWT_SECRET:local-development-only-secret-change-me-this-must-be-at-least-64-bytes-long}
+      access-token-ttl: 15m
+      refresh-token-ttl: 7d
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}

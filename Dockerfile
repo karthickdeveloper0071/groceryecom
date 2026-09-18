@@ -1,48 +1,38 @@
-# Multi-stage build for optimized Docker image
+# syntax=docker/dockerfile:1
 
-# Stage 1: Build stage
-FROM maven:3.9-eclipse-temurin-21 AS builder
-
+# ---- Build stage ----
+FROM eclipse-temurin:21-jdk-alpine AS build
 WORKDIR /build
 
-# Copy pom.xml and source code
-COPY pom.xml .
-COPY src ./src
+# Download dependencies first so they are cached until pom.xml changes
+COPY mvnw pom.xml ./
+COPY .mvn .mvn
+RUN chmod +x mvnw && ./mvnw -B -q dependency:go-offline
 
-# Build the application
-RUN mvn clean package -DskipTests
+COPY src src
+# Tests run in CI; the image build only packages
+RUN ./mvnw -B -q package -DskipTests \
+    && java -Djarmode=tools -jar target/groceryecom-*.jar extract --layers --launcher --destination extracted
 
-# Stage 2: Runtime stage
+# ---- Runtime stage ----
 FROM eclipse-temurin:21-jre-alpine
-
 WORKDIR /app
 
-# Install curl for health checks
-RUN apk add --no-cache curl
+RUN addgroup -S app && adduser -S -G app app
 
-# Create a non-root user for security
-RUN addgroup -g 1000 appuser && \
-    adduser -D -u 1000 -G appuser appuser
+# Layers ordered from least to most frequently changed, for faster pulls
+COPY --from=build /build/extracted/dependencies/ ./
+COPY --from=build /build/extracted/spring-boot-loader/ ./
+COPY --from=build /build/extracted/snapshot-dependencies/ ./
+COPY --from=build /build/extracted/application/ ./
 
-# Copy jar from builder stage
-COPY --from=builder /build/target/groceryecom-0.0.1-SNAPSHOT.jar application.jar
-
-# Change ownership to appuser
-RUN chown appuser:appuser application.jar
-
-# Switch to non-root user
-USER appuser
-
-# Expose port
+USER app
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/api/actuator/health || exit 1
+# Size the heap from the container memory limit; restart cleanly instead of limping after an OOM
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
 
-# Set JVM options for production
-ENV JAVA_OPTS="-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+ParallelRefProcEnabled -XX:+UnlockDiagnosticVMOptions -XX:G1SummarizeRSetStatsPeriod=1"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD wget -qO- http://localhost:8080/api/actuator/health/liveness || exit 1
 
-# Run the application
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar application.jar"]
-
+ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]

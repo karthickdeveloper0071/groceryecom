@@ -13,25 +13,16 @@
 	<version>0.0.1-SNAPSHOT</version>
 	<name>GroceryEcom</name>
 	<description>Multi-vendor grocery marketplace backend</description>
-	<url/>
-	<licenses>
-		<license/>
-	</licenses>
-	<developers>
-		<developer/>
-	</developers>
-	<scm>
-		<connection/>
-		<developerConnection/>
-		<tag/>
-		<url/>
-	</scm>
+
 	<properties>
 		<java.version>21</java.version>
 		<spring-modulith.version>2.1.1</spring-modulith.version>
+		<springdoc.version>3.1.1</springdoc.version>
+		<jjwt.version>0.13.0</jjwt.version>
 		<embedded-postgres.version>2.2.2</embedded-postgres.version>
 		<embedded-postgres-binaries.version>17.11.0</embedded-postgres-binaries.version>
 	</properties>
+
 	<dependencyManagement>
 		<dependencies>
 			<dependency>
@@ -50,16 +41,63 @@
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
+
 	<dependencies>
-		<!-- Spring Boot Starters -->
+		<!-- Web, validation, security -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-validation</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-api</artifactId>
+			<version>${jjwt.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-impl</artifactId>
+			<version>${jjwt.version}</version>
+			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-jackson</artifactId>
+			<version>${jjwt.version}</version>
+			<scope>runtime</scope>
+		</dependency>
+
+		<!-- Persistence: PostgreSQL, JPA, Flyway -->
+		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-jpa</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-flyway</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-database-postgresql</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+
+		<!-- Cache and messaging -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-redis</artifactId>
@@ -72,55 +110,6 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-amqp</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-integration</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-security</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-validation</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-web</artifactId>
-		</dependency>
-
-		<!-- Spring Integration -->
-		<dependency>
-			<groupId>org.springframework.integration</groupId>
-			<artifactId>spring-integration-http</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.integration</groupId>
-			<artifactId>spring-integration-jpa</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.security</groupId>
-			<artifactId>spring-security-messaging</artifactId>
-		</dependency>
-
-		<!-- Database & Persistence -->
-		<dependency>
-			<groupId>org.postgresql</groupId>
-			<artifactId>postgresql</artifactId>
-			<scope>runtime</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-flyway</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.flywaydb</groupId>
-			<artifactId>flyway-database-postgresql</artifactId>
-		</dependency>
 
 		<!-- Module boundaries and transactional event publication (outbox) -->
 		<dependency>
@@ -132,37 +121,19 @@
 			<artifactId>spring-modulith-starter-jdbc</artifactId>
 		</dependency>
 
-		<!-- Redis -->
-		<dependency>
-			<groupId>redis.clients</groupId>
-			<artifactId>jedis</artifactId>
-		</dependency>
-
-		<!-- API Documentation -->
+		<!-- API documentation -->
 		<dependency>
 			<groupId>org.springdoc</groupId>
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-			<version>3.1.1</version>
+			<version>${springdoc.version}</version>
 		</dependency>
 
-		<!-- Utilities -->
+		<!-- Development -->
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
-			<version>${lombok.version}</version>
 			<scope>provided</scope>
 		</dependency>
-		<dependency>
-			<groupId>org.modelmapper</groupId>
-			<artifactId>modelmapper</artifactId>
-			<version>3.1.1</version>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.commons</groupId>
-			<artifactId>commons-lang3</artifactId>
-		</dependency>
-
-		<!-- Development Tools -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-devtools</artifactId>
@@ -182,11 +153,6 @@
 			<scope>test</scope>
 		</dependency>
 		<dependency>
-			<groupId>org.springframework.integration</groupId>
-			<artifactId>spring-integration-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
 			<groupId>org.springframework.modulith</groupId>
 			<artifactId>spring-modulith-starter-test</artifactId>
 			<scope>test</scope>
@@ -198,77 +164,23 @@
 			<version>${embedded-postgres.version}</version>
 			<scope>test</scope>
 		</dependency>
-						<!-- JWT (JJWT) -->
-						<dependency>
-							<groupId>io.jsonwebtoken</groupId>
-							<artifactId>jjwt-api</artifactId>
-							<version>0.11.5</version>
-						</dependency>
-						<dependency>
-							<groupId>io.jsonwebtoken</groupId>
-							<artifactId>jjwt-impl</artifactId>
-							<version>0.11.5</version>
-							<scope>runtime</scope>
-						</dependency>
-						<dependency>
-							<groupId>io.jsonwebtoken</groupId>
-							<artifactId>jjwt-jackson</artifactId>
-							<version>0.11.5</version>
-							<scope>runtime</scope>
-						</dependency>
 	</dependencies>
 
 	<build>
 		<plugins>
 			<plugin>
-				<groupId>org.hibernate.orm</groupId>
-				<artifactId>hibernate-maven-plugin</artifactId>
-				<version>${hibernate.version}</version>
-				<executions>
-					<execution>
-						<id>enhance</id>
-						<goals>
-							<goal>enhance</goal>
-						</goals>
-					</execution>
-				</executions>
-			</plugin>
-															<!-- Unit and integration test configuration -->
-															<plugin>
-																<groupId>org.apache.maven.plugins</groupId>
-																<artifactId>maven-surefire-plugin</artifactId>
-																<version>3.0.0</version>
-																<configuration>
-																	<includes>
-																		<include>**/*Test.java</include>
-																	</includes>
-																	<forkCount>1</forkCount>
-																	<reuseForks>true</reuseForks>
-																	<argLine>-Dspring.profiles.active=test</argLine>
-																</configuration>
-															</plugin>
-															<plugin>
-																<groupId>org.apache.maven.plugins</groupId>
-																<artifactId>maven-failsafe-plugin</artifactId>
-																<version>3.0.0</version>
-																<executions>
-																	<execution>
-																		<goals>
-																			<goal>integration-test</goal>
-																			<goal>verify</goal>
-																		</goals>
-																	</execution>
-																</executions>
-																<configuration>
-																	<includes>
-																		<include>**/*IT.java</include>
-																	</includes>
-																	<argLine>-Dspring.profiles.active=test</argLine>
-																</configuration>
-															</plugin>
-			<plugin>
-				<groupId>org.graalvm.buildtools</groupId>
-				<artifactId>native-maven-plugin</artifactId>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<!-- Release level (java.version) and -parameters come from the Spring Boot parent -->
+					<annotationProcessorPaths>
+						<path>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+							<version>${lombok.version}</version>
+						</path>
+					</annotationProcessorPaths>
+				</configuration>
 			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
@@ -281,47 +193,6 @@
 						</exclude>
 					</excludes>
 				</configuration>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-compiler-plugin</artifactId>
-							<configuration>
-								<release>${java.version}</release>
-							</configuration>
-				<executions>
-					<execution>
-						<id>default-compile</id>
-						<phase>compile</phase>
-						<goals>
-							<goal>compile</goal>
-						</goals>
-						<configuration>
-							<annotationProcessorPaths>
-								<path>
-									<groupId>org.projectlombok</groupId>
-									<artifactId>lombok</artifactId>
-									<version>${lombok.version}</version>
-								</path>
-							</annotationProcessorPaths>
-						</configuration>
-					</execution>
-					<execution>
-						<id>default-testCompile</id>
-						<phase>test-compile</phase>
-						<goals>
-							<goal>testCompile</goal>
-						</goals>
-						<configuration>
-							<annotationProcessorPaths>
-								<path>
-									<groupId>org.projectlombok</groupId>
-									<artifactId>lombok</artifactId>
-									<version>${lombok.version}</version>
-								</path>
-							</annotationProcessorPaths>
-						</configuration>
-					</execution>
-				</executions>
 			</plugin>
 		</plugins>
 	</build>

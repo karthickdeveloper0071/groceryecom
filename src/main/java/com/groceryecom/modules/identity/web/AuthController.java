@@ -1,195 +1,75 @@
 package com.groceryecom.modules.identity.web;
 
-import com.groceryecom.shared.web.ApiResponse;
-import com.groceryecom.modules.identity.web.dto.*;
 import com.groceryecom.modules.identity.internal.AuthService;
-import com.groceryecom.platform.security.JwtAuthenticationDetails;
+import com.groceryecom.modules.identity.web.dto.AuthTokenResponse;
+import com.groceryecom.modules.identity.web.dto.ChangePasswordRequest;
+import com.groceryecom.modules.identity.web.dto.LoginRequest;
+import com.groceryecom.modules.identity.web.dto.RefreshTokenRequest;
+import com.groceryecom.modules.identity.web.dto.RegisterRequest;
+import com.groceryecom.modules.identity.web.dto.UserResponse;
+import com.groceryecom.platform.security.AuthenticatedUser;
+import com.groceryecom.platform.web.OpenApiConfig;
+import com.groceryecom.shared.web.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.UUID;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Authentication Controller
- * Handles user registration, login, token refresh, and password management
+ * Account registration, login and password management.
+ * Served under the /api context path, so the public URL is /api/v1/auth.
  */
 @RestController
-// Served under the /api context path, so the public URL is /api/v1/auth
 @RequestMapping("/v1/auth")
-@RequiredArgsConstructor
-@Slf4j
-@Tag(name = "Authentication", description = "Authentication and Authorization endpoints")
-public class AuthController {
+@Tag(name = "Authentication")
+class AuthController {
 
     private final AuthService authService;
 
-    /**
-     * User Registration Endpoint
-     * Public endpoint - no authentication required
-     */
+    AuthController(AuthService authService) {
+        this.authService = authService;
+    }
+
     @PostMapping("/register")
-    @Operation(summary = "Register a new user", description = "Register a new user account")
-    public ResponseEntity<ApiResponse<AuthTokenDTO>> register(
-            @Valid @RequestBody UserRegistrationDTO registrationDTO) {
-        
-        log.info("User registration request for: {}", registrationDTO.getUsername());
-        AuthTokenDTO authToken = authService.register(registrationDTO);
-        
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(authToken, "User registered successfully"));
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Register a customer account")
+    ApiResponse<AuthTokenResponse> register(@Valid @RequestBody RegisterRequest request) {
+        return ApiResponse.ok(authService.register(request), "Registered");
     }
 
-    /**
-     * User Login Endpoint
-     * Public endpoint - no authentication required
-     */
     @PostMapping("/login")
-    @Operation(summary = "Login user", description = "Authenticate user with username/email and password")
-    public ResponseEntity<ApiResponse<AuthTokenDTO>> login(
-            @Valid @RequestBody UserLoginDTO loginDTO) {
-        
-        log.info("User login request for: {}", loginDTO.getUsername());
-        AuthTokenDTO authToken = authService.login(loginDTO);
-        
-        return ResponseEntity.ok(ApiResponse.success(authToken, "Login successful"));
+    @Operation(summary = "Log in with username or email and password")
+    ApiResponse<AuthTokenResponse> login(@Valid @RequestBody LoginRequest request) {
+        return ApiResponse.ok(authService.login(request));
     }
 
-    /**
-     * Refresh Access Token Endpoint
-     * Public endpoint - no authentication required (uses refresh token instead)
-     */
     @PostMapping("/refresh-token")
-    @Operation(summary = "Refresh access token", description = "Get a new access token using refresh token")
-    public ResponseEntity<ApiResponse<AuthTokenDTO>> refreshToken(
-            @RequestHeader("Authorization") String authHeader) {
-        
-        log.info("Token refresh request");
-        
-        // Extract token from Bearer prefix
-        String token = authHeader;
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            token = authHeader.substring(7);
-        }
-        
-        AuthTokenDTO authToken = authService.refreshToken(token);
-        
-        return ResponseEntity.ok(ApiResponse.success(authToken, "Token refreshed successfully"));
+    @Operation(summary = "Exchange a refresh token for new tokens")
+    ApiResponse<AuthTokenResponse> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
+        return ApiResponse.ok(authService.refresh(request.refreshToken()));
     }
 
-    /**
-     * Get Current User Profile
-     * Requires authentication
-     */
     @GetMapping("/me")
-    @PreAuthorize("isAuthenticated()")
-    @SecurityRequirement(name = "Bearer Authentication")
-    @Operation(summary = "Get current user profile", description = "Get authenticated user's profile information")
-    public ResponseEntity<ApiResponse<String>> getCurrentUser() {
-        
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        String username = authentication.getName();
-        
-        log.info("Current user request for: {}", username);
-        
-        return ResponseEntity.ok(
-                ApiResponse.success(username, "Current user retrieved successfully")
-        );
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
+    @Operation(summary = "Get the logged-in user's profile")
+    ApiResponse<UserResponse> me(@AuthenticationPrincipal AuthenticatedUser user) {
+        return ApiResponse.ok(authService.getUser(user.id()));
     }
 
-    /**
-     * Logout User
-     * Requires authentication
-     */
-    @PostMapping("/logout")
-    @PreAuthorize("isAuthenticated()")
-    @SecurityRequirement(name = "Bearer Authentication")
-    @Operation(summary = "Logout user", description = "Logout authenticated user and invalidate token")
-    public ResponseEntity<ApiResponse<Void>> logout() {
-        
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        String username = authentication.getName();
-        
-        log.info("User logout request for: {}", username);
-        
-        // In production, add token to blacklist
-        SecurityContextHolder.clearContext();
-        
-        return ResponseEntity.ok(ApiResponse.success(null, "Logout successful"));
-    }
-
-    /**
-     * Change Password
-     * Requires authentication; always acts on the logged-in user, so no user id
-     * appears in the URL. Admin password resets belong in the admin console.
-     */
     @PostMapping("/change-password")
-    @PreAuthorize("isAuthenticated()")
-    @SecurityRequirement(name = "Bearer Authentication")
-    @Operation(summary = "Change user password", description = "Change password for authenticated user")
-    public ResponseEntity<ApiResponse<Void>> changePassword(
-            @Valid @RequestBody ChangePasswordDTO changePasswordDTO) {
-
-        UUID userId = ((JwtAuthenticationDetails) SecurityContextHolder.getContext().getAuthentication().getDetails()).getUserId();
-        log.info("Password change request for user: {}", userId);
-        authService.changePassword(userId, changePasswordDTO.getOldPassword(), changePasswordDTO.getNewPassword());
-        
-        return ResponseEntity.ok(ApiResponse.success(null, "Password changed successfully"));
-    }
-
-    /**
-     * Request Password Reset
-     * Public endpoint - no authentication required
-     */
-    @PostMapping("/forgot-password")
-    @Operation(summary = "Request password reset", description = "Send password reset email")
-    public ResponseEntity<ApiResponse<Void>> requestPasswordReset(
-            @Valid @RequestBody ForgotPasswordDTO forgotPasswordDTO) {
-        
-        log.info("Password reset request for email: {}", forgotPasswordDTO.getEmail());
-        authService.requestPasswordReset(forgotPasswordDTO.getEmail());
-        
-        return ResponseEntity.ok(ApiResponse.success(null, 
-                "If the email exists, you will receive a password reset link"));
-    }
-
-    /**
-     * Reset Password with Token
-     * Public endpoint - no authentication required
-     */
-    @PostMapping("/reset-password")
-    @Operation(summary = "Reset password", description = "Reset password using reset token")
-    public ResponseEntity<ApiResponse<Void>> resetPassword(
-            @Valid @RequestBody ResetPasswordDTO resetPasswordDTO) {
-        
-        log.info("Password reset with token");
-        authService.resetPassword(resetPasswordDTO.getResetToken(), resetPasswordDTO.getNewPassword());
-        
-        return ResponseEntity.ok(ApiResponse.success(null, "Password reset successfully"));
-    }
-
-    /**
-     * Verify Email Address
-     * Public endpoint - no authentication required
-     */
-    @PostMapping("/verify-email")
-    @Operation(summary = "Verify email", description = "Verify email address with verification token")
-    public ResponseEntity<ApiResponse<Void>> verifyEmail(
-            @RequestParam String token) {
-        
-        log.info("Email verification request");
-        authService.verifyEmail(token);
-        
-        return ResponseEntity.ok(ApiResponse.success(null, "Email verified successfully"));
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
+    @Operation(summary = "Change the logged-in user's password")
+    ApiResponse<Void> changePassword(@AuthenticationPrincipal AuthenticatedUser user,
+                                     @Valid @RequestBody ChangePasswordRequest request) {
+        authService.changePassword(user.id(), request);
+        return ApiResponse.ok(null, "Password changed");
     }
 }
-

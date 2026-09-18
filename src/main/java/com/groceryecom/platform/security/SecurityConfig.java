@@ -1,0 +1,105 @@
+package com.groceryecom.platform.security;
+
+import com.groceryecom.shared.web.ApiResponse;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.factory.PasswordEncoderFactories;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import tools.jackson.databind.json.JsonMapper;
+
+import java.io.IOException;
+import java.time.Duration;
+import java.util.List;
+
+/**
+ * Stateless JWT security for the API.
+ * Every endpoint requires authentication unless it is listed as public below.
+ * Request matchers are relative to the /api context path.
+ */
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
+@EnableConfigurationProperties({JwtProperties.class, CorsProperties.class})
+public class SecurityConfig {
+
+    private static final String[] PUBLIC_POST_ENDPOINTS = {
+            "/v1/auth/register",
+            "/v1/auth/login",
+            "/v1/auth/refresh-token"
+    };
+
+    private static final String[] PUBLIC_GET_ENDPOINTS = {
+            "/actuator/health", "/actuator/health/**", "/actuator/info",
+            "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**"
+    };
+
+    /**
+     * Stores hashes with an algorithm prefix ({bcrypt}...), so the algorithm can be
+     * upgraded later without invalidating existing passwords.
+     */
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtTokenProvider tokenProvider,
+                                                   CorsProperties corsProperties, JsonMapper jsonMapper) {
+        http
+                .csrf(AbstractHttpConfigurer::disable)
+                .httpBasic(AbstractHttpConfigurer::disable)
+                .formLogin(AbstractHttpConfigurer::disable)
+                .logout(AbstractHttpConfigurer::disable)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource(corsProperties)))
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint((request, response, ex) -> writeError(jsonMapper, response,
+                                HttpServletResponse.SC_UNAUTHORIZED, "UNAUTHORIZED", "Authentication required"))
+                        .accessDeniedHandler((request, response, ex) -> writeError(jsonMapper, response,
+                                HttpServletResponse.SC_FORBIDDEN, "ACCESS_DENIED", "Access denied")))
+                .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS).permitAll()
+                        .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
+                        .requestMatchers("/error").permitAll()
+                        .anyRequest().authenticated())
+                .addFilterBefore(new JwtAuthenticationFilter(tokenProvider), UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+
+    private CorsConfigurationSource corsConfigurationSource(CorsProperties properties) {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(properties.allowedOrigins());
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-Id", "Idempotency-Key"));
+        configuration.setExposedHeaders(List.of("X-Request-Id"));
+        // Tokens travel in the Authorization header, not cookies
+        configuration.setAllowCredentials(false);
+        configuration.setMaxAge(Duration.ofHours(1));
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
+
+    private static void writeError(JsonMapper jsonMapper, HttpServletResponse response, int status,
+                                   String errorCode, String message) throws IOException {
+        response.setStatus(status);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        jsonMapper.writeValue(response.getOutputStream(), ApiResponse.error(errorCode, message));
+    }
+}

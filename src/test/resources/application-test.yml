@@ -1,0 +1,21 @@
+# Test profile. Tests run against a real embedded PostgreSQL (see PostgresIntegrationTest),
+# using the production Flyway migrations and Hibernate schema validation.
+
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+  # Redis is not needed by tests
+  cache:
+    type: none
+
+logging:
+  level:
+    root: WARN
+    com.groceryecom: INFO
+
+app:
+  security:
+    jwt:
+      secret: test-secret-for-junit-only-must-be-at-least-sixty-four-bytes-long-for-hs512
