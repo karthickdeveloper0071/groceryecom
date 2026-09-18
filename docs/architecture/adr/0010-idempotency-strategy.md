@@ -1,6 +1,6 @@
 # ADR-0010: Explicit idempotency guard instead of a transparent filter
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR-0018](0018-no-message-broker-and-no-generic-idempotency-guard.md) - the guard was never used, and idempotency is done with natural keys instead
 - **Date:** 2026-09-18
 - **Deciders:** Backend team
 

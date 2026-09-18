@@ -104,6 +104,18 @@ public class AuditLog {
     }
 
     /**
+     * A store changed where its earnings are paid.
+     *
+     * <p>Among the most sensitive events on the platform: redirecting a vendor's income
+     * is exactly what an account takeover is for. The last four digits are recorded so a
+     * change is recognisable afterwards; the account number is not stored anywhere.
+     */
+    public void payoutAccountChanged(UUID actorId, UUID vendorId, String accountLast4, String status) {
+        record(AuditAction.PAYOUT_ACCOUNT_CHANGED, actorId, Outcome.SUCCESS,
+                "vendor=%s account=****%s status=%s".formatted(vendorId, accountLast4, status));
+    }
+
+    /**
      * An admin installed, replaced or switched a payment gateway's keys.
      *
      * <p>"Who changed the payment configuration, and when?" is the first question after
@@ -148,7 +160,8 @@ public class AuditLog {
         VENDOR_STATUS_CHANGED,
         SUBSCRIPTION_CHANGED,
         SUBSCRIPTION_PAYMENT_CONFIRMED,
-        PAYMENT_GATEWAY_CONFIGURED
+        PAYMENT_GATEWAY_CONFIGURED,
+        PAYOUT_ACCOUNT_CHANGED
     }
 
     public enum Outcome {

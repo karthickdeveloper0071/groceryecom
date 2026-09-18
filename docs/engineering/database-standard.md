@@ -176,7 +176,7 @@ Before pushing a migration, check:
 ## Local database
 
 `docker compose up -d` starts PostgreSQL (`postgis/postgis:17-3.5`), Redis and
-RabbitMQ with the credentials that `application.yml` defaults to. Connect with
+Redis with the credentials that `application.yml` defaults to. Connect with
 `psql -h localhost -U grocery -d grocery_ecom` (password `grocery`).
 
 To start from an empty schema, remove the volume:

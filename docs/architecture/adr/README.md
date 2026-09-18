@@ -30,13 +30,15 @@ comment covers.
 | [0007](0007-api-response-envelope-and-error-contract.md) | API response envelope and error contract | Accepted | 2026-09-18 |
 | [0008](0008-real-postgresql-in-tests.md) | Real PostgreSQL in tests | Accepted | 2026-09-18 |
 | [0009](0009-observability-stack.md) | Prometheus, Grafana and Loki as the observability stack | Accepted | 2026-09-18 |
-| [0010](0010-idempotency-strategy.md) | Explicit idempotency guard instead of a transparent filter | Accepted | 2026-09-18 |
+| [0010](0010-idempotency-strategy.md) | Explicit idempotency guard instead of a transparent filter | Superseded by ADR-0018 | 2026-09-18 |
 | [0011](0011-optimistic-locking.md) | Optimistic locking with `@Version` on `BaseEntity` | Accepted | 2026-09-18 |
 | [0012](0012-postgis-in-tests.md) | No PostGIS types in migrations until tests can run PostGIS | Accepted | 2026-09-18 |
 | [0013](0013-least-privilege-database-roles.md) | Least-privilege database roles for the application | Accepted | 2026-09-18 |
 | [0014](0014-vendor-data-isolation.md) | Vendor data isolation enforced in the application, on a shared schema | Accepted | 2026-09-18 |
 | [0015](0015-vendor-subscription-licensing.md) | Vendor licensing as a subscription, enforced by two gates | Accepted | 2026-09-18 |
 | [0016](0016-gateway-credentials-in-the-database.md) | Payment gateway credentials in the database, encrypted, edited by an admin | Accepted | 2026-09-18 |
+| [0017](0017-vendor-payouts-and-payment-splitting.md) | Vendor payouts by gateway split, with no bank details stored | Accepted | 2026-09-18 |
+| [0018](0018-no-message-broker-and-no-generic-idempotency-guard.md) | Remove the unused broker and the generic idempotency guard | Accepted | 2026-09-18 |
 
 ## How to add one
 

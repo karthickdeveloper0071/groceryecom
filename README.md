@@ -12,7 +12,7 @@ Stage 1 target: 100 vendors and up to 1,000,000 customer accounts (about 20,000 
 | Architecture | Modular monolith with module boundaries enforced by Spring Modulith |
 | Database | PostgreSQL 17 (PostGIS image), schema managed by Flyway |
 | Cache | Redis |
-| Messaging | RabbitMQ (for events between modules and background work) |
+| Events between modules | Spring Modulith events, written to an outbox table in the same transaction |
 | Auth | Stateless JWT (HS512 access and refresh tokens) |
 | API docs | OpenAPI at `/api/swagger-ui.html` |
 
@@ -25,7 +25,7 @@ docker compose up -d
 ./mvnw spring-boot:run
 ```
 
-That starts PostgreSQL, Redis and RabbitMQ. On the first start of an empty database
+That starts PostgreSQL and Redis. On the first start of an empty database
 volume, `ops/postgres/init` also creates the runtime role the API uses and the
 `pg_stat_statements` extension. If the volume is older than those scripts, reset it
 with `docker compose down -v && docker compose up -d`.

@@ -39,6 +39,8 @@ envelope is in
 | GET | `/api/v1/vendors/{vendorId}/subscription` | bearer token, store owner | 200 (licence plus the message to show the vendor) |
 | POST | `/api/v1/vendors/{vendorId}/subscription` | bearer token, store owner | 200 (choose or change plan; returns payment instructions unless the plan has a trial) |
 | POST | `/api/v1/vendors/{vendorId}/subscription/cancel` | bearer token, store owner | 200 (sells until the paid period ends) |
+| GET | `/api/v1/vendors/{vendorId}/payout-account` | bearer token, store owner | 200 (last four digits only; the account number is not stored) |
+| PUT | `/api/v1/vendors/{vendorId}/payout-account` | bearer token, store owner | 200 (bank details go to the provider, never to our database) |
 | POST | `/api/v1/billing/payments/{reference}/confirm` | bearer token, `ADMIN` | 200 (idempotent: repeating it never buys another period) |
 | POST | `/api/v1/billing/webhooks/razorpay` | public, HMAC-signed by Razorpay | 200 (also for a duplicate or an event we ignore; a non-2xx makes Razorpay retry forever) |
 | GET | `/api/v1/admin/payment-gateways` | bearer token, `ADMIN` | 200 (never returns a secret) |

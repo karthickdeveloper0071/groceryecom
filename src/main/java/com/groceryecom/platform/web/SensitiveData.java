@@ -25,6 +25,9 @@ public final class SensitiveData {
             // Payment gateway keys an admin pastes: the one request that carries a live
             // secret, so its exact field names have to be here
             "secret", "clientSecret", "apiKey", "keySecret", "webhookSecret",
+            // Vendor bank details: passed to the payment provider, never stored, and
+            // never written to a log either
+            "accountNumber", "ifscCode", "iban", "routingNumber",
             "cardNumber", "cvv", "pin", "otp");
 
     /** Matches "field": <any JSON scalar>, including numbers, null and strings with escapes. */

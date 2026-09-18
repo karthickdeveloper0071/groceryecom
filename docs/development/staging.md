@@ -39,7 +39,7 @@ Rules that go with it:
 |-------------|-----|
 | Its own PostgreSQL instance | A shared database means a staging test can corrupt production data. Non-negotiable. |
 | Its own secrets | A different `JWT_SECRET`, different database credentials. A token minted in staging must be useless in production. |
-| Its own Redis and RabbitMQ | Same reason. A shared queue would deliver staging events to production consumers. |
+| Its own Redis | Same reason. A shared queue would deliver staging events to production consumers. |
 | Production-like configuration | Same profile shape, same JSON logging, same connection pool behaviour, same TLS termination. Differences that are not deliberate make staging results meaningless. |
 | Seeded test data | Vendors, products and customer accounts created by a seed script that lives in the repository, so anyone can reset staging to a known state. |
 | **Never production data** | No dump, no subset, no "anonymised" copy. Customer addresses and order history do not belong in an environment with weaker access control. |
@@ -77,7 +77,7 @@ A smoke test proves the deployment is alive, not that the feature is correct —
 correctness is the job of the test suite. Keep it to about a minute:
 
 1. `GET /api/actuator/health/readiness` returns `UP`.
-2. `GET /api/actuator/health` returns `UP`, including Redis and RabbitMQ.
+2. `GET /api/actuator/health` returns `UP`, including Redis.
 3. `GET /api/actuator/info` reports the expected commit sha. This is what catches
    a deploy that silently did not happen.
 4. `POST /api/v1/auth/register` with a generated username, then
@@ -101,7 +101,7 @@ Concrete, in order. Each is a separate piece of work.
 3. **Provision a managed PostgreSQL 17 instance** for staging. PostGIS matters
    later, and is already a constraint on tests
    ([ADR-0012](../architecture/adr/0012-postgis-in-tests.md)).
-4. **Provision Redis and RabbitMQ** for staging.
+4. **Provision Redis** for staging.
 5. **Choose a secrets store** and put `JWT_SECRET`, database credentials and
    provider keys in it. Generate the secret with
    `openssl rand -base64 64 | tr -d '\n'`. Never reuse the production value, and

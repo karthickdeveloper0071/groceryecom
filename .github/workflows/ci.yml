@@ -105,7 +105,7 @@ jobs:
             --profile app --profile observability config --quiet
 
       # --wait blocks until every health check passes, so a failure here means the
-      # database, Redis, RabbitMQ or the API never became healthy
+      # database, Redis or the API never became healthy
       - name: Start the stack
         run: docker compose --profile app up -d --build --wait --wait-timeout 300
 

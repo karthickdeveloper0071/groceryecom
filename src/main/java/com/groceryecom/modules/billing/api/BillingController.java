@@ -1,13 +1,16 @@
 package com.groceryecom.modules.billing.api;
 
 import com.groceryecom.modules.billing.api.dto.CheckoutResponse;
+import com.groceryecom.modules.billing.api.dto.PayoutAccountResponse;
 import com.groceryecom.modules.billing.api.dto.PlanResponse;
+import com.groceryecom.modules.billing.api.dto.SavePayoutAccountRequest;
 import com.groceryecom.modules.billing.api.dto.SubscribeRequest;
 import com.groceryecom.modules.billing.api.dto.SubscriptionResponse;
 import com.groceryecom.modules.billing.application.CancelSubscriptionService;
 import com.groceryecom.modules.billing.application.ConfirmSubscriptionPaymentService;
 import com.groceryecom.modules.billing.application.GetSubscriptionService;
 import com.groceryecom.modules.billing.application.SubscribeToPlanService;
+import com.groceryecom.modules.billing.application.VendorPayoutService;
 import com.groceryecom.platform.security.AuthenticatedUser;
 import com.groceryecom.platform.web.OpenApiConfig;
 import com.groceryecom.shared.web.ApiResponse;
@@ -20,6 +23,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -48,15 +52,18 @@ class BillingController {
     private final SubscribeToPlanService subscribeToPlanService;
     private final CancelSubscriptionService cancelSubscriptionService;
     private final ConfirmSubscriptionPaymentService confirmPaymentService;
+    private final VendorPayoutService vendorPayoutService;
 
     BillingController(GetSubscriptionService getSubscriptionService,
                       SubscribeToPlanService subscribeToPlanService,
                       CancelSubscriptionService cancelSubscriptionService,
-                      ConfirmSubscriptionPaymentService confirmPaymentService) {
+                      ConfirmSubscriptionPaymentService confirmPaymentService,
+                      VendorPayoutService vendorPayoutService) {
         this.getSubscriptionService = getSubscriptionService;
         this.subscribeToPlanService = subscribeToPlanService;
         this.cancelSubscriptionService = cancelSubscriptionService;
         this.confirmPaymentService = confirmPaymentService;
+        this.vendorPayoutService = vendorPayoutService;
     }
 
     @GetMapping("/plans")
@@ -97,6 +104,29 @@ class BillingController {
     ApiResponse<SubscriptionResponse> cancel(@AuthenticationPrincipal AuthenticatedUser user,
                                              @PathVariable UUID vendorId) {
         return ApiResponse.ok(cancelSubscriptionService.execute(user, vendorId), "Plan cancelled");
+    }
+
+    @GetMapping("/vendors/{vendorId}/payout-account")
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
+    @Operation(summary = "Where the store's earnings are paid",
+            description = "Owner only. Shows the last four digits of the account and whether it is "
+                    + "verified; the account number itself is not stored and cannot be returned.")
+    ApiResponse<PayoutAccountResponse> payoutAccount(@AuthenticationPrincipal AuthenticatedUser user,
+                                                     @PathVariable UUID vendorId) {
+        return ApiResponse.ok(vendorPayoutService.ofVendor(user, vendorId));
+    }
+
+    @PutMapping("/vendors/{vendorId}/payout-account")
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
+    @Operation(summary = "Set where the store's earnings are paid",
+            description = "Owner only. The bank details go to the payment provider and are never "
+                    + "stored here. Sending new details replaces the destination and starts "
+                    + "verification again; the store keeps selling meanwhile and its earnings are held.")
+    ApiResponse<PayoutAccountResponse> savePayoutAccount(@AuthenticationPrincipal AuthenticatedUser user,
+                                                         @PathVariable UUID vendorId,
+                                                         @Valid @RequestBody SavePayoutAccountRequest request) {
+        return ApiResponse.ok(vendorPayoutService.submit(user, vendorId, request),
+                "Payout account saved");
     }
 
     @PostMapping("/billing/payments/{reference}/confirm")

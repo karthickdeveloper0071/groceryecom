@@ -130,32 +130,6 @@ services:
           memory: 768m
     restart: unless-stopped
 
-  # Events between modules and background work
-  rabbitmq:
-    image: rabbitmq:3.13-management-alpine
-    container_name: grocery_ecom_rabbitmq
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-guest}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
-    ports:
-      - "5672:5672"
-      # Management console. Local only: never publish this port in a shared environment.
-      - "15672:15672"
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    networks:
-      - ecom_network
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    deploy:
-      resources:
-        limits:
-          memory: 1g
-    restart: unless-stopped
-
   # The API itself. Started only with: --profile app
   app:
     build: .
@@ -167,8 +141,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
     environment:
       # Container-to-container addresses, not localhost
       DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-grocery_ecom}
@@ -179,9 +151,6 @@ services:
       DB_MIGRATION_USERNAME: ${DB_USERNAME:-grocery}
       DB_MIGRATION_PASSWORD: ${DB_PASSWORD:-grocery}
       REDIS_HOST: redis
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
-      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
       # No default on purpose: the API must not start with a shared, well-known secret
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (at least 64 characters)}
       # Encrypts payment gateway keys stored by an admin. No default, for the same
@@ -207,7 +176,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  rabbitmq_data:
 
 networks:
   ecom_network:

@@ -105,7 +105,7 @@ changes, database changes, security, configuration, documentation and git.
 
 **[Deployment](development/deployment.md)** — running locally with and without
 Docker, how the image is built, the health-check endpoints and why readiness
-excludes Redis and RabbitMQ, the full environment-variable table, what CI does
+excludes Redis, the full environment-variable table, what CI does
 and does not do, and production notes.
 
 **[Razorpay setup](development/razorpay-setup.md)** — what to paste where to switch on
@@ -125,9 +125,9 @@ section is marked as plan or as existing.
 ## Known gaps
 
 Documented as gaps throughout, and collected here so nobody assumes otherwise:
-only the `identity`, `vendor` and `billing` modules exist; RabbitMQ is configured
-but unused by application code; security events are written to the `audit` logger
-but there is no database-backed audit trail; nothing uses `IdempotencyGuard` yet;
+only the `identity`, `vendor` and `billing` modules exist; there is no message
+broker (module events use the outbox table); security events are written to the
+`audit` logger but there is no database-backed audit trail;
 the only payment gateway is Razorpay and it has never run against the real
 Razorpay API; there are no invoices, no proration when changing plan mid-period
 and no renewal reminder emails; there is no distributed tracing, no staging

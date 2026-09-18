@@ -12,7 +12,7 @@ and queries), [deployment](deployment.md) (Docker and environments).
 docker compose up -d
 ```
 
-That starts PostgreSQL 17 (PostGIS image), Redis and RabbitMQ. The database is then on
+That starts PostgreSQL 17 (PostGIS image) and Redis. The database is then on
 `localhost:5432`, database `grocery_ecom`.
 
 First start of an **empty** data volume also runs `ops/postgres/init`:

@@ -9,7 +9,8 @@ groceries, customers order from one or more vendors, and the platform handles
 payments, payouts and delivery. It is one Spring Boot application split into
 modules with enforced boundaries — a modular monolith, not microservices.
 
-One business module exists today: `identity` (accounts, roles, login, tokens).
+Three business modules exist today: `identity` (accounts, roles, login, tokens),
+`vendor` (stores, membership, approval) and `billing` (plans, licences, payments).
 Everything else is a plan.
 
 ## Requirements
@@ -17,7 +18,7 @@ Everything else is a plan.
 | Tool | Version | Notes |
 |------|---------|-------|
 | JDK | **21** | Maven reads `JAVA_HOME`, not the `java` on your PATH |
-| Docker | any recent | Only for PostgreSQL, Redis and RabbitMQ. Tests do not need it. |
+| Docker | any recent | Only for PostgreSQL and Redis. Tests do not need it. |
 | Git | any recent | |
 
 No Maven install needed; use the wrapper (`./mvnw`).
@@ -58,7 +59,7 @@ $env:JAVA_HOME = "C:\Program Files\Java\jdk-21"
 ```bash
 git clone https://github.com/karthickdeveloper0071/groceryecom.git
 cd groceryecom
-docker compose up -d        # PostgreSQL, Redis, RabbitMQ
+docker compose up -d        # PostgreSQL, Redis
 ./mvnw spring-boot:run
 ```
 
@@ -71,7 +72,6 @@ configuration is needed for local development.
 | http://localhost:8080/api/swagger-ui.html | Interactive API docs; use this first |
 | http://localhost:8080/api/v3/api-docs | OpenAPI document |
 | http://localhost:8080/api/actuator/health | Health |
-| http://localhost:15672 | RabbitMQ console (guest / guest) |
 
 Check it works:
 
@@ -98,7 +98,7 @@ Useful variants:
 ./mvnw test -Dtest=MoneyTest   # one class
 ```
 
-35 tests at the time of writing. Details:
+Around 200 tests at the time of writing. Details:
 [testing standard](../engineering/testing-standard.md).
 
 ## Try the API
@@ -192,9 +192,9 @@ is wrong, not the test.
 
 ## Know the gaps before you trust the docs
 
-- Only `identity` exists. The other module names are scope, not code.
-- RabbitMQ runs and is configured, but no application code publishes to it.
-- No rate limiting, no token revocation (so no real logout), no audit log.
+- Only `identity`, `vendor` and `billing` exist. The other module names are scope, not code.
+- There is no message broker. Module events go through the outbox table in the same database; a broker comes back when something outside the application has to consume them.
+- The audit trail is log lines only; there is no database-backed audit table.
 - No staging environment and no automated deploy.
 
 ## Troubleshooting

@@ -57,12 +57,6 @@ spring:
       time-to-live: 1h
       key-prefix: "ecom:"
 
-  rabbitmq:
-    host: ${RABBITMQ_HOST:localhost}
-    port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USERNAME:guest}
-    password: ${RABBITMQ_PASSWORD:guest}
-
   jackson:
     default-property-inclusion: non_null
     time-zone: UTC
@@ -125,8 +119,9 @@ management:
         enabled: true
   health:
     # Readiness decides whether the load balancer sends traffic here: only the database
-    # is essential. A Redis or RabbitMQ outage degrades features but must not take the
-    # whole instance out of rotation, and must never restart it (liveness).
+    # is essential. A Redis outage degrades features (revocation and rate limits fall
+    # back to per-instance memory) but must not take the whole instance out of rotation,
+    # and must never restart it (liveness).
     readiness:
       include: readinessState,db
   metrics:

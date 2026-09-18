@@ -216,10 +216,20 @@ an admin confirming a transfer or by Razorpay's signed webhook. The browser's ow
 "payment succeeded" callback grants nothing: a page can be closed, refreshed or
 faked.
 
+**Vendor payouts.** The other direction of money: a customer pays, and most of it
+belongs to the vendor. `VendorPayouts.splitFor(vendorId, orderTotal)` is what the
+order module will call — it applies the commission from the store's plan, rounds it
+**down**, and gives the vendor what remains, so the two parts always add up to
+exactly what the customer paid. The destination is a linked account at the payment
+provider: the bank account number is passed to the provider and **never stored
+here**, only its id and the last four digits ([ADR-0017](adr/0017-vendor-payouts-and-payment-splitting.md)).
+A store whose account is not verified yet keeps selling; its share is held, not
+lost.
+
 Not built yet: invoices and receipts, proration when changing plan mid-period,
-renewal reminders (they need the notification module), and an admin UI for plan
-prices — a price change is still a migration. The Razorpay adapter has never run
-against the real Razorpay API.
+renewal reminders (they need the notification module), the ledger that records held
+vendor earnings, and an admin UI for plan prices — a price change is still a
+migration. Neither Razorpay adapter has run against the real Razorpay API.
 
 ## Adding a module
 

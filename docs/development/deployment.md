@@ -2,7 +2,7 @@
 
 ## Local: infrastructure only (usual while coding)
 
-Runs PostgreSQL, Redis and RabbitMQ in containers; you run the app from your IDE or Maven.
+Runs PostgreSQL and Redis in containers; you run the app from your IDE or Maven.
 
 ```bash
 docker compose up -d
@@ -46,9 +46,9 @@ Notes:
 |----------|-----|
 | `/api/actuator/health/liveness` | Is the process alive? Failing means restart. Used by the image's HEALTHCHECK. |
 | `/api/actuator/health/readiness` | Should it receive traffic? Includes the database only. |
-| `/api/actuator/health` | Overall status, including Redis and RabbitMQ. |
+| `/api/actuator/health` | Overall status, including Redis. |
 
-Redis or RabbitMQ being down does not fail readiness on purpose: those outages break some features, but taking every instance out of rotation (or restarting them) would turn a partial outage into a full one.
+Redis being down does not fail readiness on purpose: those outages break some features, but taking every instance out of rotation (or restarting them) would turn a partial outage into a full one.
 
 The app shuts down gracefully: it finishes in-flight requests for up to 30 seconds. Give containers at least that long to stop.
 
@@ -66,7 +66,6 @@ development needs none of them.
 | `APP_DB_PASSWORD` | `grocery_app` | Compose only: the password the init script gives the runtime role |
 | `DB_POOL_SIZE` | `20` | Per app instance. Instances × pool size must stay under the server's `max_connections` (200 in compose) |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | `localhost` / `6379` / empty | |
-| `RABBITMQ_HOST` / `RABBITMQ_PORT` / `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` | `localhost` / `5672` / `guest` / `guest` | Configured but not used by application code yet |
 | `JWT_SECRET` | a local-only value | **Required** outside local development; at least 64 bytes. The app refuses to start with a shorter one. |
 | `SECRETS_MASTER_KEY` | a local-only value | **Required** outside local development; at least 32 bytes. Encrypts the payment gateway keys an admin installs. Changing it makes them unreadable and they must be entered again |
 | `RAZORPAY_API_URL` | `https://api.razorpay.com` | Only the address; the keys are entered in the admin console ([setup](razorpay-setup.md)) |
@@ -81,7 +80,7 @@ variables. In production, set at least:
 | `JWT_SECRET` | 64+ characters, from a secrets manager, different per environment |
 | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | Managed PostgreSQL, not a container. `DB_USERNAME` is the runtime role, not the owner |
 | `DB_MIGRATION_USERNAME`, `DB_MIGRATION_PASSWORD` | The schema owner, for Flyway. Known to the deploy step, not to the running application |
-| `REDIS_HOST`, `RABBITMQ_HOST` | Managed services |
+| `REDIS_HOST` | Managed services |
 | `CORS_ALLOWED_ORIGINS` | Your real origins only, for example `https://shop.groceryecom.com,https://admin.groceryecom.com,https://*.groceryecom.com`. Never `*` alone. |
 | `DB_POOL_SIZE` | Keep instances × pool size below the database connection limit |
 
@@ -102,7 +101,6 @@ a manual step from a built image. Details of the jobs are in the
 - Use managed PostgreSQL (backups, point-in-time recovery, a read replica), not a database container. Create the runtime role there too, with `ops/postgres/init/01-runtime-role.sql`, and give the application only that role's credentials; the owner's belong to the deploy step alone.
 - Flyway migrations run at startup. Deploy one instance first, or run migrations as a separate step, so several instances don't race; Flyway locks, but a single-runner step is clearer.
 - Keep migrations backward compatible with the running version, so a rollback doesn't break.
-- Do not expose port 15672 (RabbitMQ console) publicly.
 - Stage 1 sizing is 3-8 app instances against one PostgreSQL primary plus a read replica; see [system-architecture.md](../architecture/system-architecture.md).
 
 ## See also

@@ -18,8 +18,9 @@ nothing reacted, and there is no record that anything was missed. The mirror
 image is publishing first and then failing to commit, which announces something
 that never happened.
 
-RabbitMQ is configured in `application.yml` and runs in `docker-compose.yml`, but
-no application code publishes to it yet.
+A broker was configured in `application.yml` and ran in `docker-compose.yml` when this
+was written; it was removed in [ADR-0018](0018-no-message-broker-and-no-generic-idempotency-guard.md)
+because nothing consumed it. The outbox decision below is unaffected.
 
 ## Problem
 
