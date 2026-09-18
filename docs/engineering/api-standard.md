@@ -46,6 +46,10 @@ envelope is in
 | GET | `/api/v1/admin/payment-gateways` | bearer token, `ADMIN` | 200 (never returns a secret) |
 | PUT | `/api/v1/admin/payment-gateways/{provider}` | bearer token, `ADMIN` | 200 (install or replace keys) |
 | POST | `/api/v1/admin/payment-gateways/{provider}/enable` / `/disable` | bearer token, `ADMIN` | 200 |
+| GET | `/api/v1/admin/vendors` | bearer token, `ADMIN` | 200 (the approval queue; `status`, `search`, paged) |
+| GET | `/api/v1/admin/subscriptions` | bearer token, `ADMIN` | 200 (`status`, paged) |
+| GET | `/api/v1/admin/payments` | bearer token, `ADMIN` | 200 (`status=PENDING` is the confirm queue, paged) |
+| GET | `/api/v1/admin/users` | bearer token, `ADMIN` | 200 (`search`, `role`, paged) |
 
 Two kinds of authorisation appear in that table, and they are not interchangeable.
 `ADMIN` is a role, checked with `@PreAuthorize`. "store owner" is a **membership**,
@@ -234,8 +238,40 @@ account". Public endpoints must also be listed in `SecurityConfig`, and adding
 one there is a security review point — see the
 [security standard](security-standard.md).
 
-## Pagination (not built yet)
+## Pagination
 
-No endpoint returns a collection yet, so there is no pagination convention in
-code. When the first one lands, agree the shape once, document it here, and use
-it everywhere; do not invent it per endpoint.
+Every endpoint that returns a collection uses the same shape, and none invents its
+own. Request parameters:
+
+| Parameter | Default | Notes |
+|-----------|---------|-------|
+| `page` | `0` | Zero-based, like the database and every client library |
+| `size` | `20` | **Capped at 100.** A caller does not decide how much work the database does; a larger value is clamped, not refused |
+
+The response is `shared.web.PageResponse`, inside the usual envelope:
+
+```json
+{
+  "success": true,
+  "data": {
+    "items": [ ... ],
+    "page": 0,
+    "size": 20,
+    "totalItems": 137,
+    "totalPages": 7,
+    "hasNext": true
+  },
+  "timestamp": "2026-09-18T10:30:00Z",
+  "traceId": "6f1c..."
+}
+```
+
+`hasNext` is sent although a client could compute it: paging code that does
+arithmetic to decide whether to enable a button is paging code with an off-by-one
+in it.
+
+Spring Data's own `Page` is never serialised to a client - its JSON is large, it
+carries objects nobody uses, and its shape has changed between Spring versions.
+Build the page with `PageResponse.of(page, Mapper::toResponse)` and the request
+with `PageRequestParams.newestFirst(page, size)` (or `oldestFirst` for a work
+queue: people are served in the order they arrived).

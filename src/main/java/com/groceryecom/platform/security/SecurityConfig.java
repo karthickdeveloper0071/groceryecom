@@ -121,6 +121,10 @@ public class SecurityConfig {
                         // Before the public list: /v1/vendors/* would otherwise match /me,
                         // which is the caller's own stores and must never be anonymous.
                         .requestMatchers(HttpMethod.GET, AUTHENTICATED_BEFORE_PUBLIC).authenticated()
+                        // Every admin path, whether or not its controller remembered
+                        // @PreAuthorize. A new admin endpoint is admin-only by default,
+                        // which is the right way round for a mistake to go.
+                        .requestMatchers("/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
                         .requestMatchers(METRICS_FROM_PRIVATE_NETWORK).permitAll()
