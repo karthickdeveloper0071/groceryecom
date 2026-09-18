@@ -19,44 +19,20 @@ envelope is in
 
 ## Endpoints today
 
-| Method | Path | Auth | Success status |
-|--------|------|------|----------------|
-| POST | `/api/v1/auth/register` | public | 201 |
-| POST | `/api/v1/auth/login` | public | 200 |
-| POST | `/api/v1/auth/refresh-token` | public | 200 |
-| GET | `/api/v1/auth/me` | bearer token | 200 |
-| POST | `/api/v1/auth/change-password` | bearer token | 200 (ends every session) |
-| POST | `/api/v1/auth/logout` | bearer token | 200 (this device; send the refresh token in the body) |
-| POST | `/api/v1/auth/logout-all` | bearer token | 200 (every device) |
-| POST | `/api/v1/vendors` | bearer token | 201 (store applies; starts PENDING) |
-| GET | `/api/v1/vendors/me` | bearer token | 200 (the caller's own stores, any status) |
-| GET | `/api/v1/vendors/{vendorId}` | public | 200 (approved stores only; 404 otherwise) |
-| PATCH | `/api/v1/vendors/{vendorId}` | bearer token, store owner | 200 |
-| POST | `/api/v1/vendors/{vendorId}/approve` | bearer token, `ADMIN` | 200 |
-| POST | `/api/v1/vendors/{vendorId}/reject` | bearer token, `ADMIN` | 200 (reason required) |
-| POST | `/api/v1/vendors/{vendorId}/suspend` | bearer token, `ADMIN` | 200 (reason required) |
-| GET | `/api/v1/plans` | public | 200 (the price list) |
-| GET | `/api/v1/vendors/{vendorId}/subscription` | bearer token, store owner | 200 (licence plus the message to show the vendor) |
-| POST | `/api/v1/vendors/{vendorId}/subscription` | bearer token, store owner | 200 (choose or change plan; returns payment instructions unless the plan has a trial) |
-| POST | `/api/v1/vendors/{vendorId}/subscription/cancel` | bearer token, store owner | 200 (sells until the paid period ends) |
-| GET | `/api/v1/vendors/{vendorId}/payout-account` | bearer token, store owner | 200 (last four digits only; the account number is not stored) |
-| PUT | `/api/v1/vendors/{vendorId}/payout-account` | bearer token, store owner | 200 (bank details go to the provider, never to our database) |
-| POST | `/api/v1/billing/payments/{reference}/confirm` | bearer token, `ADMIN` | 200 (idempotent: repeating it never buys another period) |
-| POST | `/api/v1/billing/webhooks/razorpay` | public, HMAC-signed by Razorpay | 200 (also for a duplicate or an event we ignore; a non-2xx makes Razorpay retry forever) |
-| GET | `/api/v1/admin/payment-gateways` | bearer token, `ADMIN` | 200 (never returns a secret) |
-| PUT | `/api/v1/admin/payment-gateways/{provider}` | bearer token, `ADMIN` | 200 (install or replace keys) |
-| POST | `/api/v1/admin/payment-gateways/{provider}/enable` / `/disable` | bearer token, `ADMIN` | 200 |
-| GET | `/api/v1/admin/vendors` | bearer token, `ADMIN` | 200 (the approval queue; `status`, `search`, paged) |
-| GET | `/api/v1/admin/subscriptions` | bearer token, `ADMIN` | 200 (`status`, paged) |
-| GET | `/api/v1/admin/payments` | bearer token, `ADMIN` | 200 (`status=PENDING` is the confirm queue, paged) |
-| GET | `/api/v1/admin/users` | bearer token, `ADMIN` | 200 (`search`, `role`, paged) |
+No business endpoint exists yet. The only paths the application serves are the
+operational ones:
 
-Two kinds of authorisation appear in that table, and they are not interchangeable.
-`ADMIN` is a role, checked with `@PreAuthorize`. "store owner" is a **membership**,
-checked inside the service through `VendorScope`, because a role cannot express
-"this store and no other" ([ADR-0014](../architecture/adr/0014-vendor-data-isolation.md)).
-Accessing a store the caller has no membership for returns **404, not 403**: a 403
-would confirm that the store exists.
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| GET | `/api/actuator/health` | public | is it alive, and should it get traffic |
+| GET | `/api/actuator/prometheus` | private network only | metrics for scraping |
+| GET | `/api/swagger-ui.html` | public | the API documentation |
+
+Add a row here for every endpoint you build. Two kinds of authorisation will appear
+in it, and they are not interchangeable: a **role** (`@PreAuthorize("hasRole(...)")`)
+answers "what kind of person is this", while a **membership** check inside the service
+answers "may this person touch *this* record". A role cannot express the second, and
+using one where the other belongs is how one customer reads another customer's data.
 
 OpenAPI: `/api/swagger-ui.html` and `/api/v3/api-docs`.
 
@@ -143,27 +119,18 @@ API version.
 | `NOT_FOUND` | 404 | unknown resource or unknown path |
 | `METHOD_NOT_ALLOWED` | 405 | wrong HTTP method for the path |
 | `INTERNAL_ERROR` | 500 | anything unexpected |
-| `USERNAME_EXISTS` | 409 | registration, username taken |
-| `EMAIL_EXISTS` | 409 | registration, email taken |
-| `INCORRECT_PASSWORD` | 400 | change password, old password wrong |
-| `PASSWORD_UNCHANGED` | 400 | change password, new password equals old |
-| `ACCOUNT_EXISTS` | 409 | registration lost a race on a unique constraint |
-| `CONCURRENT_MODIFICATION` | 409 | optimistic lock failure; reload and retry |
-| `IDEMPOTENT_REQUEST_IN_PROGRESS` | 409 | same `Idempotency-Key` is still being processed |
+| `CONCURRENT_MODIFICATION` | 409 | optimistic lock failure (`@Version` on `BaseEntity`); reload and retry |
 | `RATE_LIMITED` | 429 | too many requests; a `Retry-After` header says when to retry |
-| `VENDOR_ALREADY_OWNED` | 409 | the account already belongs to a store |
-| `VENDOR_SLUG_EXISTS` | 409 | the storefront address is taken |
-| `INVALID_VENDOR_STATUS_TRANSITION` | 409 | e.g. approving a rejected store, or suspending a pending one |
-| `SUBSCRIPTION_REQUIRED` | 402 | the store has never bought a plan; send the client to the price list |
-| `SUBSCRIPTION_EXPIRED` | 402 | the plan ran out, grace included. The message carries the date, so show a renew button, not an error page |
-| `SUBSCRIPTION_PLAN_UNCHANGED` | 409 | choosing the plan the store is already on |
-| `SUBSCRIPTION_ALREADY_CANCELLED` | 409 | cancelling twice |
-| `PAYMENT_REFERENCE_IN_USE` | 409 | a gateway reference already belongs to another store |
-| `PAYMENT_GATEWAY_UNAVAILABLE` | 503 | the gateway rejected or did not answer; retry shortly. Its own error text is logged, never returned |
-| `SECRET_UNREADABLE` | 500 | a stored secret cannot be decrypted, usually after SECRETS_MASTER_KEY changed. Re-enter the keys in the admin console |
+| `SECRET_UNREADABLE` | 500 | a stored secret cannot be decrypted, usually after `SECRETS_MASTER_KEY` changed |
 
-Adding a business code: define it where the exception is thrown, add a row to
-this table in the same pull request, and use `SCREAMING_SNAKE_CASE`.
+Those are the codes the platform itself produces; every business module adds its
+own. Define a code where the exception is thrown, add a row to this table in the
+same pull request, and use `SCREAMING_SNAKE_CASE`.
+
+Two habits worth keeping when you do: make the **status** the category and the
+**code** the reason, and pick the status by what the client should *do*. A plan
+that expired is 402 and not 403, because one leads to a renew screen and the other
+to an error page.
 
 ## Raising errors
 

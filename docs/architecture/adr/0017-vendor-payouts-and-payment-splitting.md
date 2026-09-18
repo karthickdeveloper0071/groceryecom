@@ -1,6 +1,8 @@
 # ADR-0017: Vendor payouts by gateway split, with no bank details stored
 
-- **Status:** Accepted
+- **Status:** Accepted as a decision; the code that implemented it was removed when the
+  business modules were cleared out, so treat this as the reasoning to reuse when the
+  feature is built again, not as a description of code that exists
 - **Date:** 2026-09-18
 - **Deciders:** Backend team
 

@@ -1,8 +1,14 @@
 # GroceryEcom
 
-Backend for a multi-vendor grocery marketplace: vendors sell groceries, customers order from one or more vendors, and the platform handles payments, payouts and delivery.
+Backend for a multi-vendor grocery platform: vendors sell groceries, customers order from them, and the platform handles payments, payouts and delivery.
 
 Stage 1 target: 100 vendors and up to 1,000,000 customer accounts (about 20,000 users online at peak).
+
+**Status: the foundation, with no business logic on top of it yet.** What works today is
+everything underneath a feature — security, error handling, the database, the boundaries
+and the tests that enforce them. Business modules are written on top of it; see
+[module architecture](docs/architecture/module-architecture.md) for the layout each one
+follows.
 
 ## Stack
 
@@ -50,22 +56,30 @@ Run the tests (no Docker needed; they start an embedded PostgreSQL):
 src/main/java/com/groceryecom/
 ├── GroceryEcomApplication.java
 ├── shared/              Money, BaseEntity, ApiResponse, base exceptions
-├── platform/            security (JWT), error handling, trace ids, OpenAPI, cache
-└── modules/
-    └── identity/        accounts, roles, login, tokens
-        ├── contract/      types other modules may use: events, enums
-        ├── api/           REST controllers + dto/ request and response records
-        ├── application/   one service per use case
-        ├── domain/        entities and repositories
-        └── mapper/        entity to response mapping
+├── platform/            security (JWT), error handling, trace ids, audit log,
+│                        rate limiting, secret encryption, scheduling, OpenAPI, cache
+└── modules/             business modules go here — none yet
 src/main/resources/
 ├── application.yml
 └── db/migration/        Flyway migrations, named V<n>__<module>_<change>.sql
 ```
 
-Every business module follows that same layout; `infrastructure/` is added when a module
-talks to an external system. `ModularityTest` fails the build if a module reaches past
-another module's `contract` package.
+**There is no business module yet.** The foundation is built and tested; the features
+are not. Each module you add looks like this:
+
+```
+modules/<name>/
+├── package-info.java   @ApplicationModule — without it, the boundary checks ignore the module
+├── contract/           the only package other modules may use: events, enums, interfaces
+├── api/                REST controllers + dto/ request and response records
+├── application/        one service per use case
+├── domain/             entities and Spring Data repositories
+├── infrastructure/     adapters to external systems — only when the module needs one
+└── mapper/             entity to response mapping
+```
+
+`ModularityTest` fails the build if a module reaches past another module's `contract`
+package, or if two modules form a cycle.
 
 ## Documentation
 

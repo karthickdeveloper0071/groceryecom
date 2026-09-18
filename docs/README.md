@@ -125,10 +125,17 @@ section is marked as plan or as existing.
 ## Known gaps
 
 Documented as gaps throughout, and collected here so nobody assumes otherwise:
-only the `identity`, `vendor` and `billing` modules exist; there is no message
-broker (module events use the outbox table); security events are written to the
-`audit` logger but there is no database-backed audit trail;
-the only payment gateway is Razorpay and it has never run against the real
-Razorpay API; there are no invoices, no proration when changing plan mid-period
-and no renewal reminder emails; there is no distributed tracing, no staging
-environment and no automated deploy.
+
+- **No business module exists.** No accounts, no login, no vendors, no products, no
+  orders. What is built is the foundation they sit on — security, error handling,
+  the database, the module rules and the tests that enforce them.
+- There is no message broker; module events use the outbox table in the same
+  database.
+- Security events are written to the `audit` logger, but there is no
+  database-backed audit trail.
+- There is no distributed tracing, no staging environment and no automated deploy.
+
+Some documents here describe features that were built and then removed, so their
+reasoning survives for whoever builds them again. Those are marked at the top of
+the file — ADRs 0014 to 0017 in particular. Read them as decisions, not as
+descriptions of code that exists.
