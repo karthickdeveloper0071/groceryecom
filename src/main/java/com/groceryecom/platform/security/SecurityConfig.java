@@ -52,7 +52,10 @@ public class SecurityConfig {
             // A store's shop window, which a customer sees before signing in. One path
             // segment only, so /v1/vendors/{id}/anything stays authenticated; the service
             // returns approved stores and nothing else.
-            "/v1/vendors/*"
+            "/v1/vendors/*",
+            // The price list. Somebody deciding whether to sell here should not have to
+            // create an account to see what it costs.
+            "/v1/plans"
     };
 
     /**

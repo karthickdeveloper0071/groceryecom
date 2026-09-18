@@ -20,6 +20,9 @@ import java.util.UUID;
  * @param contactPhone  null in the public view
  * @param status        PENDING, APPROVED, REJECTED or SUSPENDED
  * @param statusReason  why it was rejected or suspended; null otherwise
+ * @param canSell       approved AND licensed: what decides whether the store trades
+ * @param planExpiresAt when the licence runs out; null in the public view and before
+ *                      the store has ever had one
  * @param registeredAt  when the application was made
  */
 public record VendorResponse(
@@ -31,5 +34,7 @@ public record VendorResponse(
         String contactPhone,
         VendorStatus status,
         String statusReason,
+        Boolean canSell,
+        Instant planExpiresAt,
         Instant registeredAt) {
 }

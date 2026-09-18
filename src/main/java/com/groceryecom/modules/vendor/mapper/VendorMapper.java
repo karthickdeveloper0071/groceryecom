@@ -22,6 +22,8 @@ public final class VendorMapper {
                 vendor.getContactPhone(),
                 vendor.getStatus(),
                 vendor.getStatusReason(),
+                vendor.isSellable(),
+                vendor.getPlanExpiresAt(),
                 vendor.getCreatedAt());
     }
 
@@ -39,6 +41,10 @@ public final class VendorMapper {
                 null,
                 null,
                 vendor.getStatus(),
+                null,
+                // A store only reaches the public view when it can sell, and when its
+                // licence runs out belongs between the store and the platform
+                null,
                 null,
                 vendor.getCreatedAt());
     }

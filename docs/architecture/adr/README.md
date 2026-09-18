@@ -35,6 +35,7 @@ comment covers.
 | [0012](0012-postgis-in-tests.md) | No PostGIS types in migrations until tests can run PostGIS | Accepted | 2026-09-18 |
 | [0013](0013-least-privilege-database-roles.md) | Least-privilege database roles for the application | Accepted | 2026-09-18 |
 | [0014](0014-vendor-data-isolation.md) | Vendor data isolation enforced in the application, on a shared schema | Accepted | 2026-09-18 |
+| [0015](0015-vendor-subscription-licensing.md) | Vendor licensing as a subscription, enforced by two gates | Accepted | 2026-09-18 |
 
 ## How to add one
 

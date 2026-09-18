@@ -69,6 +69,15 @@ public class Vendor extends BaseEntity {
     @Column(name = "status_changed_at")
     private Instant statusChangedAt;
 
+    // A copy of the billing module's answer to "is this store licensed today?", so the
+    // shop window does not query the billing tables and the dependency runs one way.
+    // Written only through VendorPlanState, never by a vendor editing its profile.
+    @Column(name = "subscription_active", nullable = false)
+    private Boolean subscriptionActive = false;
+
+    @Column(name = "plan_expires_at")
+    private Instant planExpiresAt;
+
     /** A new application: pending until an admin decides. */
     public static Vendor apply(String slug, String legalName, String displayName,
                                String contactEmail, String contactPhone) {
@@ -101,8 +110,41 @@ public class Vendor extends BaseEntity {
         changeStatus(VendorStatus.SUSPENDED, reason);
     }
 
+    /**
+     * Two gates, and both must be open: an admin decided the store may be here, and it
+     * holds a licence that has not run out. Either one closing takes the store off the
+     * storefront, and they close for different reasons - conduct and payment.
+     */
     public boolean isSellable() {
-        return status.isSellable();
+        return status.isSellable() && Boolean.TRUE.equals(subscriptionActive);
+    }
+
+    /**
+     * Billing says the store is licensed until {@code expiresAt}.
+     *
+     * <p>This is also what opens a store for business without anyone clicking approve:
+     * paying for a plan (or starting its trial) turns a pending application into a
+     * trading store. An admin who rejected or suspended a store is not overruled by a
+     * payment - that store stays closed until the admin says otherwise, and the money
+     * conversation is a refund, not an override.
+     *
+     * @return true when this call also approved a store that was waiting
+     */
+    public boolean planActivated(Instant expiresAt) {
+        this.subscriptionActive = true;
+        this.planExpiresAt = expiresAt;
+
+        if (status == VendorStatus.PENDING) {
+            changeStatus(VendorStatus.APPROVED, null);
+            return true;
+        }
+        return false;
+    }
+
+    /** Billing says the licence has run out, including any grace days. */
+    public void planExpired(Instant expiredAt) {
+        this.subscriptionActive = false;
+        this.planExpiresAt = expiredAt;
     }
 
     private void changeStatus(VendorStatus next, String reason) {

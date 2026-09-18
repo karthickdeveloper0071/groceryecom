@@ -92,8 +92,12 @@ class VendorIsolationIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    /**
+     * Two gates, and both must be open: an admin decided the store may be here, and it
+     * holds a licence. Approval alone is not a storefront.
+     */
     @Test
-    void aPendingStoreIsNotOnTheStorefrontAndAnApprovedOneIs() throws Exception {
+    void aStoreReachesTheStorefrontOnlyWhenItIsBothApprovedAndLicensed() throws Exception {
         Store store = openStore();
 
         // Anonymous, as a customer browsing
@@ -101,6 +105,12 @@ class VendorIsolationIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(status().isNotFound());
 
         approve(store.vendorId());
+
+        // Approved, but with no plan: still not selling
+        mockMvc.perform(getApi("/v1/vendors/" + store.vendorId(), null))
+                .andExpect(status().isNotFound());
+
+        startPlan(store);
 
         mockMvc.perform(getApi("/v1/vendors/" + store.vendorId(), null))
                 .andExpect(status().isOk())
@@ -146,7 +156,9 @@ class VendorIsolationIntegrationTest extends PostgresIntegrationTest {
     @Test
     void aSuspendedStoreLeavesTheStorefront() throws Exception {
         Store store = openStore();
-        approve(store.vendorId());
+        // A plan opens the store by itself: paying is the approval
+        startPlan(store);
+        mockMvc.perform(getApi("/v1/vendors/" + store.vendorId(), null)).andExpect(status().isOk());
 
         mockMvc.perform(postApi("/v1/vendors/" + store.vendorId() + "/suspend", adminToken())
                         .content("{\"reason\":\"" + REASON + "\"}"))
@@ -216,6 +228,18 @@ class VendorIsolationIntegrationTest extends PostgresIntegrationTest {
 
     private void approve(String vendorId) throws Exception {
         mockMvc.perform(postApi("/v1/vendors/" + vendorId + "/approve", adminToken()))
+                .andExpect(status().isOk());
+    }
+
+    /**
+     * Puts the store on a plan with a free trial, which licenses it immediately. That
+     * also approves a store still waiting for an admin, which is the point of it:
+     * licensing is what opens a shop, and these tests would otherwise describe a
+     * storefront nobody can reach.
+     */
+    private void startPlan(Store store) throws Exception {
+        mockMvc.perform(postApi("/v1/vendors/" + store.vendorId() + "/subscription", store.accessToken())
+                        .content("{\"planCode\":\"STARTER\"}"))
                 .andExpect(status().isOk());
     }
 

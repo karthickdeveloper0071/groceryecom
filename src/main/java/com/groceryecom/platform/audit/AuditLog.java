@@ -86,6 +86,23 @@ public class AuditLog {
                 "vendor=%s status=%s%s".formatted(vendorId, status, reason == null ? "" : " reason=" + reason));
     }
 
+    /** A store chose, changed or cancelled its plan. Money follows from this. */
+    public void subscriptionChanged(UUID actorId, UUID vendorId, String planCode, String status) {
+        record(AuditAction.SUBSCRIPTION_CHANGED, actorId, Outcome.SUCCESS,
+                "vendor=%s plan=%s status=%s".formatted(vendorId, planCode, status));
+    }
+
+    /**
+     * A subscription payment was settled, which is what lets a store trade.
+     *
+     * @param actorId the admin who confirmed a transfer, or null when a gateway did
+     * @param amount  the amount and currency, never any payment credential
+     */
+    public void subscriptionPaymentConfirmed(UUID actorId, UUID vendorId, String amount, String reference) {
+        record(AuditAction.SUBSCRIPTION_PAYMENT_CONFIRMED, actorId, Outcome.SUCCESS,
+                "vendor=%s amount=%s reference=%s".formatted(vendorId, amount, reference));
+    }
+
     /**
      * A refresh token was presented twice. Either it leaked or a client is buggy; both are
      * worth investigating, so this is recorded as a failure.
@@ -115,7 +132,9 @@ public class AuditLog {
         SESSION_REVOKED,
         ALL_SESSIONS_REVOKED,
         VENDOR_REGISTERED,
-        VENDOR_STATUS_CHANGED
+        VENDOR_STATUS_CHANGED,
+        SUBSCRIPTION_CHANGED,
+        SUBSCRIPTION_PAYMENT_CONFIRMED
     }
 
     public enum Outcome {

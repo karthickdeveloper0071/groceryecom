@@ -35,6 +35,11 @@ envelope is in
 | POST | `/api/v1/vendors/{vendorId}/approve` | bearer token, `ADMIN` | 200 |
 | POST | `/api/v1/vendors/{vendorId}/reject` | bearer token, `ADMIN` | 200 (reason required) |
 | POST | `/api/v1/vendors/{vendorId}/suspend` | bearer token, `ADMIN` | 200 (reason required) |
+| GET | `/api/v1/plans` | public | 200 (the price list) |
+| GET | `/api/v1/vendors/{vendorId}/subscription` | bearer token, store owner | 200 (licence plus the message to show the vendor) |
+| POST | `/api/v1/vendors/{vendorId}/subscription` | bearer token, store owner | 200 (choose or change plan; returns payment instructions unless the plan has a trial) |
+| POST | `/api/v1/vendors/{vendorId}/subscription/cancel` | bearer token, store owner | 200 (sells until the paid period ends) |
+| POST | `/api/v1/billing/payments/{reference}/confirm` | bearer token, `ADMIN` | 200 (idempotent: repeating it never buys another period) |
 
 Two kinds of authorisation appear in that table, and they are not interchangeable.
 `ADMIN` is a role, checked with `@PreAuthorize`. "store owner" is a **membership**,
@@ -139,6 +144,10 @@ API version.
 | `VENDOR_ALREADY_OWNED` | 409 | the account already belongs to a store |
 | `VENDOR_SLUG_EXISTS` | 409 | the storefront address is taken |
 | `INVALID_VENDOR_STATUS_TRANSITION` | 409 | e.g. approving a rejected store, or suspending a pending one |
+| `SUBSCRIPTION_REQUIRED` | 402 | the store has never bought a plan; send the client to the price list |
+| `SUBSCRIPTION_EXPIRED` | 402 | the plan ran out, grace included. The message carries the date, so show a renew button, not an error page |
+| `SUBSCRIPTION_PLAN_UNCHANGED` | 409 | choosing the plan the store is already on |
+| `SUBSCRIPTION_ALREADY_CANCELLED` | 409 | cancelling twice |
 
 Adding a business code: define it where the exception is thrown, add a row to
 this table in the same pull request, and use `SCREAMING_SNAKE_CASE`.

@@ -112,6 +112,7 @@ invisible to the checks, which is the most common way to accidentally escape the
 |--------|--------|------|
 | `identity` | Built | users, roles, tokens |
 | `vendor` | Built | vendors, membership, approval; KYC, bank accounts and commission plans still to come |
+| `billing` | Built | plans, vendor licences, subscription payments, expiry |
 | `catalog` | Planned | categories, products, SKUs, images, prices |
 | `inventory` | Planned | stock levels, reservations, stock movements |
 | `checkout` | Planned | carts (Redis), checkout sessions |
@@ -120,7 +121,7 @@ invisible to the checks, which is the most common way to accidentally escape the
 | `delivery` | Planned | addresses, delivery zones (PostGIS), slots, shipments |
 | `notification` | Planned | templates, delivery log (events only, no public contract) |
 
-Only `identity` and `vendor` exist. Everything marked Planned is a name and a
+Only `identity`, `vendor` and `billing` exist. Everything marked Planned is a name and a
 scope, nothing more — do not assume any of its code, tables or endpoints exist.
 
 ## The identity module today
@@ -143,8 +144,13 @@ subjects. Usernames and emails are stored lower-case with unique constraints and
 ## The vendor module today
 
 What it does: an account applies to open a store, the store's owner manages its
-profile, and an admin approves, rejects or suspends it. Only an approved store
-appears on the storefront, and only an approved store will be allowed to sell.
+profile, and an admin approves, rejects or suspends it.
+
+A store reaches the storefront only when **both** gates are open: an admin has
+approved it, and it holds a live licence (`subscription_active`, maintained by the
+billing module through `VendorPlanState`). Buying a plan also approves a store that
+was still waiting, so a vendor can sign up and start selling in one sitting —
+[ADR-0015](adr/0015-vendor-subscription-licensing.md).
 
 Access to a store's data is decided by **membership**, not by the account's role.
 `vendor_members` maps a user to a store as `OWNER` or `STAFF`; a user with no row
@@ -167,6 +173,36 @@ is recorded in the ADR.
 
 Not built yet: staff invitations, KYC documents, bank accounts and commission
 plans.
+
+## The billing module today
+
+What it does: sells the licence a store needs to trade. Three plans (`STARTER`,
+`GROWTH`, `SCALE`) seeded by `V6`, one licence row per store, and an append-only
+record of every charge.
+
+The shape of it:
+
+- choosing a plan with trial days starts the store selling immediately and asks for
+  nothing; a plan without them creates a charge and the store waits for the money;
+- `ConfirmSubscriptionPaymentService` turns a payment into permission. It is written
+  to be called twice — an admin clicking again, a gateway retrying a webhook — and
+  the second call changes nothing;
+- `SubscriptionExpiryService`, run hourly by `SubscriptionExpiryJob`, moves a licence
+  to `PAST_DUE` (still selling, through its grace days) and then `EXPIRED` (off the
+  storefront). It is safe to run on every instance at once;
+- `BillingMapper` writes the sentence the vendor sees about their plan, so every
+  client shows the same words.
+
+Its `contract` package publishes `SubscriptionStatus`, the `SubscriptionEvents` and
+`VendorEntitlements`. **Every module built after this asks
+`VendorEntitlements.requireTrading(vendorId)` before letting a store act** — catalog
+before another product, order before taking money. It throws 402 with the date the
+plan ended, so the client shows a renew button rather than an error.
+
+Billing depends on the vendor module's contract, and the vendor module knows nothing
+about billing: one direction, so the two cannot form a cycle. Not built yet: a real
+payment gateway (only bank transfer confirmed by an admin), invoices, proration when
+changing plan mid-period, and an admin UI for plans.
 
 ## Adding a module
 

@@ -4,6 +4,8 @@ import com.groceryecom.modules.vendor.contract.VendorStatus;
 import com.groceryecom.shared.exception.ConflictException;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -14,6 +16,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class VendorStatusTransitionTest {
 
     private static final String REASON = "Documents do not match the registered business";
+    private static final Instant EXPIRES = Instant.parse("2026-12-31T00:00:00Z");
 
     @Test
     void aNewApplicationIsPendingAndCannotSell() {
@@ -23,21 +26,77 @@ class VendorStatusTransitionTest {
         assertThat(vendor.isSellable()).isFalse();
     }
 
+    /**
+     * Approval is one of two gates. An approved store with no licence is a shop with the
+     * lights on and the door locked, which is exactly what the platform wants until it
+     * is paid.
+     */
     @Test
-    void approvingAPendingApplicationLetsItSell() {
+    void approvalAloneDoesNotLetAStoreSell() {
         Vendor vendor = newApplication();
 
         vendor.approve();
 
         assertThat(vendor.getStatus()).isEqualTo(VendorStatus.APPROVED);
-        assertThat(vendor.isSellable()).isTrue();
+        assertThat(vendor.isSellable()).isFalse();
         assertThat(vendor.getStatusChangedAt()).isNotNull();
+    }
+
+    @Test
+    void anApprovedStoreWithALicenceSells() {
+        Vendor vendor = newApplication();
+        vendor.approve();
+
+        vendor.planActivated(EXPIRES);
+
+        assertThat(vendor.isSellable()).isTrue();
+        assertThat(vendor.getPlanExpiresAt()).isEqualTo(EXPIRES);
+    }
+
+    /** Paying is the approval: nobody has to click anything for a store to open. */
+    @Test
+    void aLicenceOpensAStoreThatWasStillWaitingForAnAdmin() {
+        Vendor vendor = newApplication();
+
+        boolean approvedByThis = vendor.planActivated(EXPIRES);
+
+        assertThat(approvedByThis).isTrue();
+        assertThat(vendor.getStatus()).isEqualTo(VendorStatus.APPROVED);
+        assertThat(vendor.isSellable()).isTrue();
+    }
+
+    /** A payment does not overturn an admin who closed a store. */
+    @Test
+    void aLicenceDoesNotReopenASuspendedStore() {
+        Vendor vendor = newApplication();
+        vendor.approve();
+        vendor.planActivated(EXPIRES);
+        vendor.suspend(REASON);
+
+        boolean approvedByThis = vendor.planActivated(EXPIRES);
+
+        assertThat(approvedByThis).isFalse();
+        assertThat(vendor.getStatus()).isEqualTo(VendorStatus.SUSPENDED);
+        assertThat(vendor.isSellable()).isFalse();
+    }
+
+    @Test
+    void aLicenceRunningOutTakesTheStoreOffTheStorefront() {
+        Vendor vendor = newApplication();
+        vendor.planActivated(EXPIRES);
+
+        vendor.planExpired(EXPIRES);
+
+        assertThat(vendor.isSellable()).isFalse();
+        // Still approved: what ended is the licence, not the admin's decision
+        assertThat(vendor.getStatus()).isEqualTo(VendorStatus.APPROVED);
     }
 
     @Test
     void aSuspendedStoreStopsSellingAndKeepsTheReason() {
         Vendor vendor = newApplication();
         vendor.approve();
+        vendor.planActivated(EXPIRES);
 
         vendor.suspend(REASON);
 
@@ -50,6 +109,7 @@ class VendorStatusTransitionTest {
     void aSuspendedStoreCanBeRestored() {
         Vendor vendor = newApplication();
         vendor.approve();
+        vendor.planActivated(EXPIRES);
         vendor.suspend(REASON);
 
         vendor.approve();

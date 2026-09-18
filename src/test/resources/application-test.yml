@@ -38,3 +38,9 @@ app:
       refresh-token:
         limit: 1000
         window: 1m
+
+  # The expiry job runs on a clock; tests call SubscriptionExpiryService directly with
+  # the instant they want, so the scheduler stays out of the way.
+  billing:
+    expiry-job:
+      enabled: false

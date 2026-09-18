@@ -186,6 +186,22 @@ app:
       allowed-origin-patterns: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
       max-age: 1h
 
+  # Vendor licensing. Commercial policy, so it lives in configuration: the people who
+  # decide how long a late payer keeps selling should not need a release to change their
+  # minds. The plans themselves (prices, limits, trial days) are rows in the plans table,
+  # seeded by V6, because they are data a business edits, not settings an engineer deploys.
+  billing:
+    # "manual" is a bank transfer an admin confirms, which is how a marketplace starts.
+    # A real gateway is one more class implementing PaymentGateway.
+    provider: ${BILLING_PROVIDER:manual}
+    # How long a store keeps selling after its period ends without payment
+    grace-period: ${BILLING_GRACE_PERIOD:3d}
+    expiry-job:
+      enabled: ${BILLING_EXPIRY_JOB_ENABLED:true}
+      # Hourly: nobody should wait until midnight to sell after paying, and nobody should
+      # keep selling all day on a licence that ended this morning
+      cron: "0 5 * * * *"
+
 # ============================================================================
 # Shared and production environments: machine-readable logs, no local defaults
 # ============================================================================
