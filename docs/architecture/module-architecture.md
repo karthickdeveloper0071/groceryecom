@@ -99,8 +99,32 @@ Prefer events. A call couples two modules at runtime; an event does not.
 | Check | What it catches |
 |-------|-----------------|
 | `modules.verify()` | a module reaching past another module's `contract` package; cycles between modules |
-| ArchUnit rule | anything in `shared..` or `platform..` depending on `com.groceryecom.modules..` |
 | `detectsExpectedModules` | `shared` or `platform` disappearing or being renamed silently |
+
+`ArchitectureRulesTest` turns the rest of this document into tests. Sixteen of them,
+and a rule nobody can break by accident is worth more than a rule everybody agrees
+with:
+
+| Rule | What it stops |
+|------|---------------|
+| Layer direction | `shared` depending on anything of ours; `platform` knowing about a business module |
+| `api` ✗ `domain` | a controller loading entities - business logic in the wrong place |
+| `domain` ✗ `api`, `application` | the dependency arrow pointing the wrong way |
+| `contract` ✗ everything else | the public surface dragging an entity along with it |
+| No entity in or out of a controller | publishing the schema, and serialising whatever a lazy association touches |
+| No `double` for money | fractions of a sen disappearing |
+| No `java.util.Date` | a hidden default time zone, one day wrong for one customer |
+| No `@Transactional` on a controller | a transaction held open while the response serialises |
+| No `@Autowired` fields | classes that cannot be built in a test |
+| No `System.out` | a line with no level, no trace id and nothing to search |
+| Entities extend `BaseEntity` | an entity with no `@Version`, so two writers overwrite each other |
+| DTOs are records | a DTO growing behaviour |
+| Names match packages | a controller outside `api` escaping every rule about `api` |
+
+The one documented exception is `JwtTokenProvider`, which uses `java.util.Date`
+because the JWT library takes one. It converts on the way in and out, so no `Date`
+escapes the class - and the exception is named in the rule rather than quietly
+allowed.
 
 `spring.modulith.detection-strategy=explicitly-annotated`: only packages annotated
 `@ApplicationModule` are modules. A new module without `package-info.java` is
