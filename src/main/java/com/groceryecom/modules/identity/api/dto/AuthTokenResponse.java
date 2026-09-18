@@ -1,4 +1,4 @@
-package com.groceryecom.modules.identity.web.dto;
+package com.groceryecom.modules.identity.api.dto;
 
 /**
  * @param expiresIn access token lifetime in seconds

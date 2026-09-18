@@ -33,6 +33,15 @@ public abstract class BaseEntity implements Serializable {
     @Column(name = "updated_at")
     protected Instant updatedAt;
 
+    /**
+     * Optimistic lock. Two transactions that read the same row and both write it do not
+     * silently overwrite each other: the second commit fails and surfaces as HTTP 409.
+     * Every migration must give its table {@code version BIGINT NOT NULL DEFAULT 0}.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    protected Long version;
+
     @Column(name = "is_active", nullable = false)
     protected Boolean isActive = true;
 

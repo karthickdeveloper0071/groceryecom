@@ -1,12 +1,16 @@
+# Infrastructure only:      docker compose up -d
+# Infrastructure + the API: docker compose --profile app up -d --build
+# The app profile needs JWT_SECRET; copy .env.example to .env first.
+
 services:
   # PostgreSQL with PostGIS (delivery zones need it later)
   postgres:
     image: postgis/postgis:17-3.5
     container_name: grocery_ecom_postgres
     environment:
-      POSTGRES_DB: grocery_ecom
-      POSTGRES_USER: grocery
-      POSTGRES_PASSWORD: grocery
+      POSTGRES_DB: ${DB_NAME:-grocery_ecom}
+      POSTGRES_USER: ${DB_USERNAME:-grocery}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-grocery}
     ports:
       - "5432:5432"
     volumes:
@@ -14,14 +18,15 @@ services:
     networks:
       - ecom_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U grocery -d grocery_ecom"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-grocery} -d ${DB_NAME:-grocery_ecom}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
-  # Redis Cache
+  # Cache, carts, rate limits
   redis:
-    image: redis:7.0-alpine
+    image: redis:7-alpine
     container_name: grocery_ecom_redis
     ports:
       - "6379:6379"
@@ -34,14 +39,15 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
-  # RabbitMQ Message Queue
+  # Events between modules and background work
   rabbitmq:
-    image: rabbitmq:3.12-management-alpine
+    image: rabbitmq:3.13-management-alpine
     container_name: grocery_ecom_rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -54,14 +60,43 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  # The API itself. Started only with: --profile app
+  app:
+    build: .
+    image: groceryecom:local
+    container_name: grocery_ecom_api
+    profiles: ["app"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      # Container-to-container addresses, not localhost
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-grocery_ecom}
+      DB_USERNAME: ${DB_USERNAME:-grocery}
+      DB_PASSWORD: ${DB_PASSWORD:-grocery}
+      REDIS_HOST: redis
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+      # No default on purpose: the API must not start with a shared, well-known secret
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (at least 64 characters)}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+    ports:
+      - "8080:8080"
+    networks:
+      - ecom_network
+    restart: unless-stopped
 
 volumes:
   postgres_data:
-    driver: local
   redis_data:
-    driver: local
   rabbitmq_data:
-    driver: local
 
 networks:
   ecom_network:

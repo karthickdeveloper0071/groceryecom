@@ -1,6 +1,6 @@
-package com.groceryecom.modules.identity.internal;
+package com.groceryecom.modules.identity.domain;
 
-import com.groceryecom.modules.identity.api.Role;
+import com.groceryecom.modules.identity.contract.Role;
 import com.groceryecom.shared.persistence.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

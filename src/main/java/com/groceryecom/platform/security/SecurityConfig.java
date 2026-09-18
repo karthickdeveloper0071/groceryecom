@@ -16,6 +16,8 @@ import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.util.matcher.IpAddressMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -48,6 +50,25 @@ public class SecurityConfig {
     };
 
     /**
+     * Where a metrics scrape may come from. Metrics describe the system (endpoints, error
+     * rates, pool sizes), so they are not public; but Prometheus cannot hold a user token,
+     * so the rule is the network it runs on. In Docker and Kubernetes the scraper is on a
+     * private address; a request from the internet is authenticated like any other.
+     */
+    private static final List<IpAddressMatcher> PRIVATE_NETWORKS = List.of(
+            new IpAddressMatcher("127.0.0.1/32"),
+            new IpAddressMatcher("::1/128"),
+            new IpAddressMatcher("10.0.0.0/8"),
+            new IpAddressMatcher("172.16.0.0/12"),
+            new IpAddressMatcher("192.168.0.0/16"));
+
+    private static final RequestMatcher METRICS_FROM_PRIVATE_NETWORK = request ->
+            HttpMethod.GET.matches(request.getMethod())
+                    && (request.getRequestURI().contains("/actuator/prometheus")
+                    || request.getRequestURI().contains("/actuator/metrics"))
+                    && isPrivateAddress(request.getRemoteAddr());
+
+    /**
      * Stores hashes with an algorithm prefix ({bcrypt}...), so the algorithm can be
      * upgraded later without invalidating existing passwords.
      */
@@ -64,6 +85,8 @@ public class SecurityConfig {
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
+                // Preflight (OPTIONS) is answered by this filter before authorization runs,
+                // so a browser check never needs a token
                 .cors(cors -> cors.configurationSource(corsConfigurationSource(corsProperties)))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(exceptions -> exceptions
@@ -74,32 +97,46 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
+                        .requestMatchers(METRICS_FROM_PRIVATE_NETWORK).permitAll()
                         .requestMatchers("/error").permitAll()
+                        // Includes a metrics scrape from anywhere else, which then needs a token
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(tokenProvider), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
-    private CorsConfigurationSource corsConfigurationSource(CorsProperties properties) {
+    /**
+     * One rule for every frontend of the platform: the customer app, the admin console
+     * and each vendor storefront. Patterns let a new vendor subdomain work without a
+     * redeploy; see {@link CorsProperties}.
+     */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource(CorsProperties properties) {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(properties.allowedOrigins());
+        configuration.setAllowedOriginPatterns(properties.allowedOriginPatterns());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-Id", "Idempotency-Key"));
+        configuration.setAllowedHeaders(List.of(
+                "Authorization", "Content-Type", "Accept", "Accept-Language", "X-Request-Id", "Idempotency-Key"));
+        // Headers a browser script is allowed to read from the response
         configuration.setExposedHeaders(List.of("X-Request-Id"));
         // Tokens travel in the Authorization header, not cookies
         configuration.setAllowCredentials(false);
-        configuration.setMaxAge(Duration.ofHours(1));
+        configuration.setMaxAge(properties.maxAge());
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
     }
 
+    private static boolean isPrivateAddress(String remoteAddress) {
+        return remoteAddress != null && PRIVATE_NETWORKS.stream().anyMatch(matcher -> matcher.matches(remoteAddress));
+    }
+
     private static void writeError(JsonMapper jsonMapper, HttpServletResponse response, int status,
-                                   String errorCode, String message) throws IOException {
+                                   String code, String message) throws IOException {
         response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        jsonMapper.writeValue(response.getOutputStream(), ApiResponse.error(errorCode, message));
+        jsonMapper.writeValue(response.getOutputStream(), ApiResponse.error(code, message));
     }
 }

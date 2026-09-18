@@ -14,8 +14,9 @@ concurrency:
 
 jobs:
   build:
+    name: Build, test and analyse
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4
@@ -27,8 +28,9 @@ jobs:
           java-version: '21'
           cache: maven
 
-      # Compiles, runs all tests (including embedded PostgreSQL and module boundary checks) and packages
-      - name: Build and test
+      # Compiles, runs every test (embedded PostgreSQL, module boundary rules),
+      # runs SpotBugs static analysis and packages the jar
+      - name: Build, test and static analysis
         run: ./mvnw -B verify
 
       - name: Upload test reports
@@ -36,4 +38,43 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-reports
-          path: target/surefire-reports/
+          path: |
+            target/surefire-reports/
+            target/spotbugsXml.xml
+
+  dependency-scan:
+    name: Dependency vulnerability scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Reports known vulnerabilities in declared dependencies. Fails on HIGH/CRITICAL
+      # so a vulnerable library cannot reach main unnoticed.
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+
+  docker:
+    name: Build Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Proves the image still builds; publishing to a registry comes with the
+      # deployment pipeline, which does not exist yet
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: groceryecom:ci

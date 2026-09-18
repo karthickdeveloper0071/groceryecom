@@ -72,7 +72,7 @@ class AuthFlowIntegrationTest extends PostgresIntegrationTest {
                         "{\"username\":\"%s\",\"email\":\"other%s@example.com\",\"password\":\"password123\"}"
                                 .formatted(username.toUpperCase(), suffix)))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.errorCode").value("USERNAME_EXISTS"));
+                .andExpect(jsonPath("$.code").value("USERNAME_EXISTS"));
 
         // Login by email in any letter case
         String loginBody = login(email.toUpperCase(), "password123");
@@ -101,7 +101,7 @@ class AuthFlowIntegrationTest extends PostgresIntegrationTest {
         // Old password no longer works; new one does
         mockMvc.perform(json("/v1/auth/login", "{\"username\":\"%s\",\"password\":\"password123\"}".formatted(username)))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.errorCode").value("UNAUTHORIZED"));
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
         login(username, "newPassword456");
     }
 

@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
-public class JwtTokenProvider {
+public final class JwtTokenProvider {
 
     private static final String CLAIM_TOKEN_TYPE = "token_type";
     private static final String CLAIM_USERNAME = "username";

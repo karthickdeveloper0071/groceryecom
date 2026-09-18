@@ -1,4 +1,4 @@
-package com.groceryecom.modules.identity.web.dto;
+package com.groceryecom.modules.identity.api.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;

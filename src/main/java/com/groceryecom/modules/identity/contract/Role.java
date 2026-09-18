@@ -1,4 +1,4 @@
-package com.groceryecom.modules.identity.api;
+package com.groceryecom.modules.identity.contract;
 
 /**
  * Platform-wide account roles.

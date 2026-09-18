@@ -36,12 +36,12 @@ public class RequestIdFilter extends OncePerRequestFilter {
                 ? incoming
                 : UUID.randomUUID().toString();
 
-        MDC.put(ApiResponse.REQUEST_ID_KEY, requestId);
+        MDC.put(ApiResponse.TRACE_ID_KEY, requestId);
         response.setHeader(HEADER, requestId);
         try {
             filterChain.doFilter(request, response);
         } finally {
-            MDC.remove(ApiResponse.REQUEST_ID_KEY);
+            MDC.remove(ApiResponse.TRACE_ID_KEY);
         }
     }
 }

@@ -1,4 +1,4 @@
-package com.groceryecom.modules.identity.api;
+package com.groceryecom.modules.identity.contract;
 
 import java.util.UUID;
 

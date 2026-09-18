@@ -1,4 +1,4 @@
-package com.groceryecom.modules.identity.web.dto;
+package com.groceryecom.modules.identity.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.AssertTrue;

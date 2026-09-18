@@ -25,6 +25,12 @@ docker compose up -d
 ./mvnw spring-boot:run
 ```
 
+Or run everything in Docker (copy `.env.example` to `.env` and set `JWT_SECRET` first):
+
+```bash
+docker compose --profile app up -d --build
+```
+
 The API runs at `http://localhost:8080/api`. Check it with `curl http://localhost:8080/api/actuator/health`.
 
 Run the tests (no Docker needed; they start an embedded PostgreSQL):
@@ -38,19 +44,29 @@ Run the tests (no Docker needed; they start an embedded PostgreSQL):
 ```
 src/main/java/com/groceryecom/
 ├── GroceryEcomApplication.java
-├── shared/          Money, BaseEntity, ApiResponse, base exceptions
-├── platform/        security (JWT), error handling, request ids, OpenAPI, cache
+├── shared/              Money, BaseEntity, ApiResponse, base exceptions
+├── platform/            security (JWT), error handling, trace ids, OpenAPI, cache
 └── modules/
-    └── identity/    accounts, roles, login, tokens
-        ├── api/        the only package other modules may use
-        ├── internal/   entities, repositories, services
-        └── web/        controllers and request/response records
+    └── identity/        accounts, roles, login, tokens
+        ├── contract/      types other modules may use: events, enums
+        ├── api/           REST controllers + dto/ request and response records
+        ├── application/   one service per use case
+        ├── domain/        entities and repositories
+        └── mapper/        entity to response mapping
 src/main/resources/
 ├── application.yml
-└── db/migration/    Flyway migrations, named V<n>__<module>_<change>.sql
+└── db/migration/        Flyway migrations, named V<n>__<module>_<change>.sql
 ```
+
+Every business module follows that same layout; `infrastructure/` is added when a module
+talks to an external system. `ModularityTest` fails the build if a module reaches past
+another module's `contract` package.
 
 ## Documentation
 
-- [docs/architecture.md](docs/architecture.md): modules, dependency rules, data rules and roadmap
-- [docs/development.md](docs/development.md): setup, configuration, conventions, and how to add a module
+- [docs/README.md](docs/README.md): index of all engineering documentation
+- [docs/onboarding/backend-developer-guide.md](docs/onboarding/backend-developer-guide.md): setup, run, test, troubleshooting
+- [docs/architecture/system-architecture.md](docs/architecture/system-architecture.md): shape, sizing, stack, cross-cutting behaviour
+- [docs/architecture/module-architecture.md](docs/architecture/module-architecture.md): module layout, dependency rules, roadmap
+- [docs/architecture/adr/README.md](docs/architecture/adr/README.md): architecture decision records
+- [docs/development/deployment.md](docs/development/deployment.md): running and deploying with Docker

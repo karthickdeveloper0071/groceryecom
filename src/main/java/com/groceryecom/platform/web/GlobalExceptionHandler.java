@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
@@ -42,6 +43,17 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("ACCESS_DENIED", "Access denied"));
     }
 
+    /**
+     * Two transactions wrote the same row; the second one lost. The caller should read the
+     * current state and retry, so this is a conflict, not a server fault.
+     */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOptimisticLockFailure(ObjectOptimisticLockingFailureException ex) {
+        log.info("Concurrent modification detected: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error("CONCURRENT_MODIFICATION",
+                "The record was changed by someone else. Reload it and try again."));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception ex) {
         log.error("Unexpected error", ex);
@@ -73,13 +85,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body, HttpHeaders headers,
                                                              HttpStatusCode statusCode, WebRequest request) {
         HttpStatus status = HttpStatus.resolve(statusCode.value());
-        String errorCode = status != null ? status.name() : "HTTP_" + statusCode.value();
+        String code = status != null ? status.name() : "HTTP_" + statusCode.value();
         String message = status != null ? status.getReasonPhrase() : "Request failed";
         if (statusCode.is5xxServerError()) {
             log.error("Request failed with {}", statusCode, ex);
         } else {
             log.debug("Request failed with {}: {}", statusCode, ex.getMessage());
         }
-        return ResponseEntity.status(statusCode).headers(headers).body(ApiResponse.error(errorCode, message));
+        return ResponseEntity.status(statusCode).headers(headers).body(ApiResponse.error(code, message));
     }
 }

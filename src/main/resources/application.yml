@@ -15,6 +15,10 @@ spring:
       minimum-idle: 5
       connection-timeout: 30000 # ms (Hikari takes plain milliseconds)
       max-lifetime: 1800000 # ms
+      data-source-properties:
+        # A runaway query is cancelled instead of holding a connection and a lock forever.
+        # Raise it per query (not globally) if a report legitimately needs longer.
+        options: "-c statement_timeout=10s -c lock_timeout=3s -c idle_in_transaction_session_timeout=30s"
 
   jpa:
     # Flyway owns the schema (db/migration); Hibernate only checks that entities match it
@@ -52,6 +56,15 @@ spring:
     default-property-inclusion: non_null
     time-zone: UTC
 
+  # Java 21 virtual threads: each request gets its own, so waiting on the database or
+  # Redis no longer ties up a platform thread
+  threads:
+    virtual:
+      enabled: true
+
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
   web:
     resources:
       # Pure API: unknown paths return a JSON 404 instead of looking for static files
@@ -72,25 +85,60 @@ server:
   error:
     include-message: never
     include-stacktrace: never
+  # Finish in-flight requests before the container stops
   shutdown: graceful
+  # Trust X-Forwarded-* only when the immediate peer is a proxy we recognise, so a client
+  # cannot forge its own address. "framework" would trust the header from anyone, which
+  # also defeats the private-network rule on the metrics endpoint in SecurityConfig.
+  forward-headers-strategy: native
+  tomcat:
+    remoteip:
+      # Tomcat's default: private ranges. If your load balancer has a public address,
+      # add it here, or client IPs in logs will be the load balancer's.
+      internal-proxies: ${TRUSTED_PROXIES:10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|192\\.168\\.\\d{1,3}\\.\\d{1,3}|169\\.254\\.\\d{1,3}\\.\\d{1,3}|127\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|172\\.1[6-9]{1}\\.\\d{1,3}\\.\\d{1,3}|172\\.2[0-9]{1}\\.\\d{1,3}\\.\\d{1,3}|172\\.3[0-1]{1}\\.\\d{1,3}\\.\\d{1,3}|0:0:0:0:0:0:0:1|::1}
+    # Limits on request size, so a single caller cannot tie up memory
+    max-http-form-post-size: 256KB
+    max-swallow-size: 2MB
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # health and info are public; metrics and prometheus are restricted to
+        # private networks in SecurityConfig, because they describe the system
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: when-authorized
       probes:
         enabled: true
+  health:
+    # Readiness decides whether the load balancer sends traffic here: only the database
+    # is essential. A Redis or RabbitMQ outage degrades features but must not take the
+    # whole instance out of rotation, and must never restart it (liveness).
+    readiness:
+      include: readinessState,db
+  metrics:
+    tags:
+      # Every series is labelled with the app, so one dashboard can serve several services later
+      application: ${spring.application.name}
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  distribution:
+    # Histograms let Prometheus compute p95/p99 latency per endpoint
+    percentiles-histogram:
+      http.server.requests: true
+    slo:
+      http.server.requests: 100ms,250ms,500ms,1s,2s
 
 logging:
   level:
     root: INFO
     com.groceryecom: INFO
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{requestId:-}] %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{traceId:-}] %logger{36} - %msg%n"
 
 app:
   security:
@@ -100,4 +148,27 @@ app:
       access-token-ttl: 15m
       refresh-token-ttl: 7d
     cors:
-      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+      # Origin patterns for every frontend: customer app, admin console, vendor storefronts.
+      # "*" may replace one host label, so https://*.groceryecom.com covers every vendor
+      # subdomain without a redeploy. Comma-separated. Never "*" alone in a shared environment.
+      allowed-origin-patterns: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+      max-age: 1h
+
+# ============================================================================
+# Shared and production environments: machine-readable logs, no local defaults
+# ============================================================================
+---
+spring:
+  config:
+    activate:
+      on-profile: staging,prod
+
+logging:
+  structured:
+    # One JSON object per line (Elastic Common Schema), so Loki, Elasticsearch or
+    # CloudWatch can index fields such as log.level, message and trace.id
+    format:
+      console: ecs
+  level:
+    root: INFO
+    com.groceryecom: INFO

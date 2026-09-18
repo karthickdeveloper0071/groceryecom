@@ -8,36 +8,41 @@ import java.util.Map;
 
 /**
  * The single JSON envelope for every API response, success or error.
- * The HTTP status code is the source of truth for the outcome; {@code errorCode}
- * is a stable, machine-readable reason that clients can switch on.
+ *
+ * <p>Success: {@code {"success": true, "data": ..., "timestamp": ..., "traceId": ...}}
+ * <br>Error: {@code {"success": false, "code": "USERNAME_EXISTS", "message": ..., "timestamp": ..., "traceId": ...}}
+ *
+ * <p>The HTTP status says what happened; {@code code} is a stable, machine-readable
+ * reason that clients may switch on. {@code traceId} matches the {@code X-Request-Id}
+ * response header and the trace id in the server logs.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ApiResponse<T>(
         boolean success,
         T data,
         String message,
-        String errorCode,
+        String code,
         Map<String, String> errors,
         Instant timestamp,
-        String requestId) {
+        String traceId) {
 
-    /** MDC key holding the current request's correlation id (set by the platform's request id filter). */
-    public static final String REQUEST_ID_KEY = "requestId";
+    /** MDC key holding the current request's trace id (set by the platform's request id filter). */
+    public static final String TRACE_ID_KEY = "traceId";
 
     public static <T> ApiResponse<T> ok(T data) {
         return ok(data, null);
     }
 
     public static <T> ApiResponse<T> ok(T data, String message) {
-        return new ApiResponse<>(true, data, message, null, null, Instant.now(), MDC.get(REQUEST_ID_KEY));
+        return new ApiResponse<>(true, data, message, null, null, Instant.now(), MDC.get(TRACE_ID_KEY));
     }
 
-    public static ApiResponse<Void> error(String errorCode, String message) {
-        return new ApiResponse<>(false, null, message, errorCode, null, Instant.now(), MDC.get(REQUEST_ID_KEY));
+    public static ApiResponse<Void> error(String code, String message) {
+        return new ApiResponse<>(false, null, message, code, null, Instant.now(), MDC.get(TRACE_ID_KEY));
     }
 
     public static ApiResponse<Void> validationFailed(Map<String, String> fieldErrors) {
         return new ApiResponse<>(false, null, "Validation failed", "VALIDATION_ERROR", fieldErrors,
-                Instant.now(), MDC.get(REQUEST_ID_KEY));
+                Instant.now(), MDC.get(TRACE_ID_KEY));
     }
 }
