@@ -100,7 +100,7 @@ Prefer events. A call couples two modules at runtime; an event does not.
 |-------|-----------------|
 | `modules.verify()` | a module reaching past another module's `contract` package; cycles between modules |
 | ArchUnit rule | anything in `shared..` or `platform..` depending on `com.groceryecom.modules..` |
-| `detectsExpectedModules` | `shared`, `platform` or `modules.identity` disappearing or being renamed silently |
+| `detectsExpectedModules` | `shared` or `platform` disappearing or being renamed silently |
 
 `spring.modulith.detection-strategy=explicitly-annotated`: only packages annotated
 `@ApplicationModule` are modules. A new module without `package-info.java` is

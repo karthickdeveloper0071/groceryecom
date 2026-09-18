@@ -52,7 +52,7 @@ class CorsRulesTest extends PostgresIntegrationTest {
 
     @Test
     void preflightFromTheCustomerAppIsAllowedWithoutAToken() throws Exception {
-        mockMvc.perform(preflight(CUSTOMER_APP, "POST", "/v1/auth/login"))
+        mockMvc.perform(preflight(CUSTOMER_APP, "POST", "/v1/anything"))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, CUSTOMER_APP))
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS,
@@ -64,21 +64,21 @@ class CorsRulesTest extends PostgresIntegrationTest {
     /** The point of using patterns: a new vendor subdomain works with no config change. */
     @Test
     void preflightFromAnyVendorSubdomainIsAllowed() throws Exception {
-        mockMvc.perform(preflight(VENDOR_STOREFRONT, "GET", "/v1/auth/me"))
+        mockMvc.perform(preflight(VENDOR_STOREFRONT, "GET", "/v1/anything"))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, VENDOR_STOREFRONT));
     }
 
     @Test
     void preflightFromAVendorOwnDomainListedExplicitlyIsAllowed() throws Exception {
-        mockMvc.perform(preflight(VENDOR_OWN_DOMAIN, "POST", "/v1/auth/login"))
+        mockMvc.perform(preflight(VENDOR_OWN_DOMAIN, "POST", "/v1/anything"))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, VENDOR_OWN_DOMAIN));
     }
 
     @Test
     void preflightFromAnUnknownSiteIsRejected() throws Exception {
-        mockMvc.perform(preflight(UNKNOWN_SITE, "POST", "/v1/auth/login"))
+        mockMvc.perform(preflight(UNKNOWN_SITE, "POST", "/v1/anything"))
                 .andExpect(status().isForbidden())
                 .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
     }
@@ -86,7 +86,7 @@ class CorsRulesTest extends PostgresIntegrationTest {
     /** A look-alike host must not match the wildcard: only one label may be replaced. */
     @Test
     void preflightFromALookAlikeDomainIsRejected() throws Exception {
-        mockMvc.perform(preflight("https://groceryecom.com.evil.example", "POST", "/v1/auth/login"))
+        mockMvc.perform(preflight("https://groceryecom.com.evil.example", "POST", "/v1/anything"))
                 .andExpect(status().isForbidden());
     }
 

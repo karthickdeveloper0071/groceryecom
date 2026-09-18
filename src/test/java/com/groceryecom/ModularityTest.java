@@ -15,10 +15,16 @@ class ModularityTest {
 
     private final ApplicationModules modules = ApplicationModules.of(GroceryEcomApplication.class);
 
+    /**
+     * The two foundation modules. Business modules are added under
+     * {@code com.groceryecom.modules} and are picked up automatically once they carry a
+     * {@code package-info.java} with @ApplicationModule - without it a module is invisible
+     * to every check below, which is the usual way one escapes them.
+     */
     @Test
     void detectsExpectedModules() {
         assertThat(modules.stream().map(module -> module.getBasePackage().getName()))
-                .contains("com.groceryecom.shared", "com.groceryecom.platform", "com.groceryecom.modules.identity");
+                .contains("com.groceryecom.shared", "com.groceryecom.platform");
     }
 
     /** A module may use another module only through its api package, and never in a cycle. */

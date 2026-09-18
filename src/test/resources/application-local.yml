@@ -1,0 +1,29 @@
+# Running the application with no Docker: see LocalDevApplication.
+#
+# The database comes from that class (an embedded PostgreSQL). This file turns off the
+# things that need a Redis nobody is running, so the app starts clean instead of logging
+# connection failures every few seconds.
+spring:
+  # Revocation and rate-limit counters live in this process. Same behaviour for one
+  # instance; sharing them across instances is what Redis is for, and that cannot be
+  # tested this way.
+  cache:
+    type: none
+
+app:
+  security:
+    tokens:
+      store: memory
+    rate-limit:
+      store: memory
+
+management:
+  health:
+    # Without it, /actuator/health reports DOWN for a Redis that is not meant to be here
+    redis:
+      enabled: false
+
+logging:
+  level:
+    root: INFO
+    com.groceryecom: DEBUG

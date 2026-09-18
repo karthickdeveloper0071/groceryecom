@@ -40,35 +40,35 @@ import java.util.List;
 @EnableConfigurationProperties({JwtProperties.class, CorsProperties.class, RateLimitProperties.class})
 public class SecurityConfig {
 
+    /**
+     * Endpoints anybody may POST to without a token.
+     *
+     * <p>Empty, and adding to it is a security decision: everything not listed here needs
+     * authentication, which is the right way round. A sign-in endpoint goes here, and so
+     * does a payment gateway's webhook - a gateway cannot hold a bearer token, so it is
+     * authenticated by a signature instead, verified inside the controller.
+     */
     private static final String[] PUBLIC_POST_ENDPOINTS = {
-            "/v1/auth/register",
-            "/v1/auth/login",
-            "/v1/auth/refresh-token",
-            // Payment gateway callbacks. Public because a gateway cannot hold a bearer
-            // token; authenticated instead by an HMAC signature over the raw body, which
-            // the controller verifies before it looks at anything else. A gateway with no
-            // webhook secret configured has every callback refused.
-            "/v1/billing/webhooks/*"
-    };
-
-    private static final String[] PUBLIC_GET_ENDPOINTS = {
-            "/actuator/health", "/actuator/health/**", "/actuator/info",
-            "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**",
-            // A store's shop window, which a customer sees before signing in. One path
-            // segment only, so /v1/vendors/{id}/anything stays authenticated; the service
-            // returns approved stores and nothing else.
-            "/v1/vendors/*",
-            // The price list. Somebody deciding whether to sell here should not have to
-            // create an account to see what it costs.
-            "/v1/plans"
     };
 
     /**
-     * Paths that a pattern in {@link #PUBLIC_GET_ENDPOINTS} would otherwise open up.
-     * Matched first, so the more specific rule wins. Covered by {@code SecurityRulesTest}.
+     * Endpoints anybody may GET. The health check and the API documentation only; add a
+     * path here when it genuinely serves people who are not signed in.
+     */
+    private static final String[] PUBLIC_GET_ENDPOINTS = {
+            "/actuator/health", "/actuator/health/**", "/actuator/info",
+            "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**"
+    };
+
+    /**
+     * Paths that a wildcard in {@link #PUBLIC_GET_ENDPOINTS} would otherwise open up.
+     * Matched first, so the more specific rule wins.
+     *
+     * <p>This list exists because a pattern like {@code /v1/things/*} also matches
+     * {@code /v1/things/me} - a private endpoint accidentally made public by a wildcard
+     * meant for public ones. When you add a wildcard above, check what else it catches.
      */
     private static final String[] AUTHENTICATED_BEFORE_PUBLIC = {
-            "/v1/vendors/me"
     };
 
     /**
