@@ -1,0 +1,81 @@
+package com.groceryecom.platform.audit;
+
+import com.groceryecom.shared.web.ApiResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+import org.springframework.stereotype.Component;
+
+import java.util.UUID;
+
+/**
+ * Records security-relevant events: who did what, and whether it worked.
+ *
+ * <p>Written to a dedicated logger named {@code audit}, so these lines can be routed to
+ * their own file, index or retention rule without being mixed into application logging.
+ * In staging and production they are JSON, one object per line.
+ *
+ * <p>An audit line answers a question someone will ask later: "was this account taken
+ * over?", "who changed this password?", "when did these failed logins start?". It carries
+ * the actor, the outcome and the trace id, never a password, token or full card number.
+ *
+ * <p>Today this is log-based. A database-backed trail with retention and an admin UI is a
+ * separate decision, needed before the platform handles other people's money.
+ */
+@Component
+public class AuditLog {
+
+    public static final String LOGGER_NAME = "audit";
+    private static final String ANONYMOUS = "anonymous";
+
+    private static final Logger log = LoggerFactory.getLogger(LOGGER_NAME);
+
+    /** An account was created. */
+    public void registered(UUID userId, String role) {
+        record(AuditAction.REGISTERED, userId, Outcome.SUCCESS, "role=" + role);
+    }
+
+    public void loginSucceeded(UUID userId) {
+        record(AuditAction.LOGIN_SUCCEEDED, userId, Outcome.SUCCESS, "");
+    }
+
+    /**
+     * @param userId the matched account, or null when no account matched. The attempted
+     *               identifier is deliberately not recorded: it is often a mistyped
+     *               password in the username field.
+     */
+    public void loginFailed(UUID userId, String reason) {
+        record(AuditAction.LOGIN_FAILED, userId, Outcome.FAILURE, "reason=" + reason);
+    }
+
+    public void tokenRefreshed(UUID userId) {
+        record(AuditAction.TOKEN_REFRESHED, userId, Outcome.SUCCESS, "");
+    }
+
+    public void passwordChanged(UUID userId) {
+        record(AuditAction.PASSWORD_CHANGED, userId, Outcome.SUCCESS, "");
+    }
+
+    private void record(AuditAction action, UUID actor, Outcome outcome, String detail) {
+        log.info("audit action={} actor={} outcome={} traceId={}{}",
+                action,
+                actor != null ? actor : ANONYMOUS,
+                outcome,
+                MDC.get(ApiResponse.TRACE_ID_KEY),
+                detail.isEmpty() ? "" : " " + detail);
+    }
+
+    /** Actions worth keeping a permanent record of. Add one per security-relevant change. */
+    public enum AuditAction {
+        REGISTERED,
+        LOGIN_SUCCEEDED,
+        LOGIN_FAILED,
+        TOKEN_REFRESHED,
+        PASSWORD_CHANGED
+    }
+
+    public enum Outcome {
+        SUCCESS,
+        FAILURE
+    }
+}

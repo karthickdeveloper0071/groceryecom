@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SpotBugs findings that are wrong or not useful here. Every exclusion needs a reason:
+  if you add one, say why the warning does not apply.
+-->
+<FindBugsFilter>
+    <!-- Lombok-generated equals/hashCode and builders trip several stylistic detectors -->
+    <Match>
+        <Bug pattern="EQ_UNUSUAL,NP_NONNULL_RETURN_VIOLATION,RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+        <Source name="~.*lombok.*"/>
+    </Match>
+
+    <!-- Spring injects into fields of configuration property records; not a real exposure -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+
+    <!--
+      RequestIdFilter echoes the inbound X-Request-Id header back to the caller, but only
+      after matching it against [A-Za-z0-9._-]{1,64}, so header (CRLF) injection is not
+      possible; anything else is replaced with a generated UUID. SpotBugs cannot see the
+      regex guard. Covered by SecurityRulesTest.everyResponseCarriesATraceId.
+    -->
+    <Match>
+        <Class name="com.groceryecom.platform.web.RequestIdFilter"/>
+        <Bug pattern="HRS_REQUEST_PARAMETER_TO_HTTP_HEADER"/>
+    </Match>
+</FindBugsFilter>

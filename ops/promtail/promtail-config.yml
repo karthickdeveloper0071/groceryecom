@@ -1,0 +1,94 @@
+# Promtail: collects container stdout and ships it to Loki.
+#
+# How it finds logs: the Docker socket is mounted read-only and used for service
+# discovery plus the log stream, because that is the only way to get the container
+# *name* (the log files under /var/lib/docker/containers are named by container id).
+# /var/lib/docker/containers is mounted read-only as well, for the commented file-based
+# job at the bottom, which is the fallback when the socket is not available.
+#
+# Field names: in the prod and staging profiles the app logs Elastic Common Schema JSON
+# to stdout (logging.structured.format.console: ecs), so "log.level" and "message" are
+# real ECS field names. The trace id is NOT "trace.id" here: it comes from MDC key
+# "traceId", and Spring Boot's ECS formatter writes MDC entries as top-level fields, so
+# the JSON field is "traceId". Both keys are extracted, so the pipeline keeps working if
+# a real tracer later emits "trace.id" too.
+#
+# Labels are deliberately only container, stream and log_level. The trace id is
+# extracted but never labelled: one stream per trace id would blow up Loki's index.
+# Query it as a field instead:
+#   {container="grocery_ecom_api"} | json | traceId = "0b7c9f..."
+#
+# With the default (local) profile the app logs a human-readable line, not JSON. The
+# JSON stage then extracts nothing, the line is still shipped, and log_level is empty.
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: warn
+
+positions:
+  filename: /tmp/promtail/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 15s
+    relabel_configs:
+      # "/grocery_ecom_api" -> container="grocery_ecom_api"
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: container
+      - source_labels: ["__meta_docker_container_log_stream"]
+        target_label: stream
+      - target_label: job
+        replacement: docker
+    pipeline_stages:
+      # ECS JSON from the app. Dotted ECS keys are quoted JMESPath identifiers.
+      - json:
+          expressions:
+            log_level: '"log.level"'
+            message: message
+            logger: '"log.logger"'
+            trace_id: traceId
+            ecs_trace_id: '"trace.id"'
+          drop_malformed: false
+      # Low-cardinality labels only: level yes, trace id never.
+      - labels:
+          log_level:
+
+# Fallback when the Docker socket cannot be used: read the json-file logs directly.
+# Container *names* are not available this way, only ids, so the dashboard's
+# {container=~".*api.*"} matcher has to become {container_id=~"..."}.
+#
+#  - job_name: docker-files
+#    static_configs:
+#      - targets: ["localhost"]
+#        labels:
+#          job: docker-files
+#          __path__: /var/lib/docker/containers/*/*-json.log
+#    pipeline_stages:
+#      - json:
+#          expressions:
+#            output: log
+#            stream: stream
+#            timestamp: time
+#      - regex:
+#          source: filename
+#          expression: "/var/lib/docker/containers/(?P<container_id>[^/]{12})[^/]*/.*"
+#      - timestamp:
+#          source: timestamp
+#          format: RFC3339Nano
+#      - output:
+#          source: output
+#      - json:
+#          expressions:
+#            log_level: '"log.level"'
+#            message: message
+#            trace_id: traceId
+#      - labels:
+#          log_level:
+#          container_id:
