@@ -20,6 +20,17 @@ spring:
         # Raise it per query (not globally) if a report legitimately needs longer.
         options: "-c statement_timeout=10s -c lock_timeout=3s -c idle_in_transaction_session_timeout=30s"
 
+  flyway:
+    # Migrations need DDL, so they connect as the schema owner. The application itself
+    # connects as a DML-only role (see ops/postgres/init/01-runtime-role.sql), which
+    # cannot create or drop anything even if application code tries.
+    # Defaults to the application credentials, so a single-role database still works.
+    user: ${DB_MIGRATION_USERNAME:${DB_USERNAME:grocery}}
+    password: ${DB_MIGRATION_PASSWORD:${DB_PASSWORD:grocery}}
+    # Setting a user gives Flyway its own connection, separate from the Hikari pool.
+    # That is wanted: the pool sets statement_timeout=10s, which is right for a request
+    # and wrong for a migration that builds an index on a large table.
+
   jpa:
     # Flyway owns the schema (db/migration); Hibernate only checks that entities match it
     hibernate:

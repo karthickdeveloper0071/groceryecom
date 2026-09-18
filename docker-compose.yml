@@ -1,6 +1,14 @@
 # Infrastructure only:      docker compose up -d
 # Infrastructure + the API: docker compose --profile app up -d --build
 # The app profile needs JWT_SECRET; copy .env.example to .env first.
+#
+# First run after upgrading from an earlier version of this file: the PostgreSQL init
+# scripts in ops/postgres/init run only when the data volume is empty, so an existing
+# volume has no grocery_app role and the API would fail to authenticate. There is no
+# production data yet, so start clean:
+#     docker compose down -v && docker compose up -d
+# On a database that does have data, run the scripts by hand instead; see
+# docs/development/database-operations.md.
 
 services:
   # PostgreSQL with PostGIS (delivery zones need it later)
@@ -9,12 +17,75 @@ services:
     container_name: grocery_ecom_postgres
     environment:
       POSTGRES_DB: ${DB_NAME:-grocery_ecom}
+      # Schema owner. Flyway migrations connect as this role; the API does not.
       POSTGRES_USER: ${DB_USERNAME:-grocery}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-grocery}
+      # Read by 02-runtime-role-password.sh to set the API's DML-only role password
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-grocery_app}
+      # UTF-8 explicitly. Collation is deliberately NOT set here: it decides ORDER BY
+      # results and which indexes LIKE can use, and it must match the managed database
+      # rather than a value invented locally. Compare "SHOW lc_collate" on both.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+      TZ: UTC
+      PGTZ: UTC
+    # Server settings. Defaults assume a tiny machine: 128MB of cache and no query
+    # statistics, which hides every performance problem until production.
+    command:
+      - postgres
+      # Instances x DB_POOL_SIZE must stay below this. 8 x 20 = 160, plus headroom
+      # for migrations, psql and pg_dump.
+      - -c
+      - max_connections=200
+      # ~25% of the container's memory for shared cache, ~75% as the planner's estimate
+      # of total cache (including the OS page cache).
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - effective_cache_size=1536MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=128MB
+      # SSD, so a random read costs nearly the same as a sequential one. Left at the
+      # spinning-disk default of 4.0, the planner avoids indexes it should use.
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - effective_io_concurrency=200
+      # Spread checkpoints out instead of stalling writes in bursts
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - wal_compression=on
+      # Where slow queries come from. pg_stat_statements needs preloading.
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
+      - -c
+      - track_io_timing=on
+      # Operational logging: anything slower than half a second, every lock wait,
+      # every checkpoint, and both ends of a failed connection.
+      - -c
+      - log_min_duration_statement=500ms
+      - -c
+      - log_lock_waits=on
+      - -c
+      - log_checkpoints=on
+      - -c
+      - log_temp_files=0
+      - -c
+      - log_autovacuum_min_duration=0
+      - -c
+      - timezone=UTC
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Roles, privileges and extensions. Run once, on an empty volume only.
+      - ./ops/postgres/init:/docker-entrypoint-initdb.d:ro
+    # Parallel query and hash joins use shared memory; Docker's 64MB default is small
+    shm_size: 256mb
     networks:
       - ecom_network
     healthcheck:
@@ -22,12 +93,26 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2g
     restart: unless-stopped
 
   # Cache, carts, rate limits
   redis:
     image: redis:7-alpine
     container_name: grocery_ecom_redis
+    # Rate-limit counters and revocation entries are disposable, so memory is capped
+    # and the oldest keys are evicted rather than letting Redis fill the machine.
+    command:
+      - redis-server
+      - --maxmemory
+      - 512mb
+      - --maxmemory-policy
+      - allkeys-lru
+      - --appendonly
+      - "no"
     ports:
       - "6379:6379"
     volumes:
@@ -39,6 +124,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 768m
     restart: unless-stopped
 
   # Events between modules and background work
@@ -50,6 +139,7 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
     ports:
       - "5672:5672"
+      # Management console. Local only: never publish this port in a shared environment.
       - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
@@ -60,6 +150,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1g
     restart: unless-stopped
 
   # The API itself. Started only with: --profile app
@@ -78,8 +172,12 @@ services:
     environment:
       # Container-to-container addresses, not localhost
       DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-grocery_ecom}
-      DB_USERNAME: ${DB_USERNAME:-grocery}
-      DB_PASSWORD: ${DB_PASSWORD:-grocery}
+      # The API runs as the DML-only role: it can read and write rows, not change the schema
+      DB_USERNAME: grocery_app
+      DB_PASSWORD: ${APP_DB_PASSWORD:-grocery_app}
+      # Flyway connects as the owner, because migrations need DDL
+      DB_MIGRATION_USERNAME: ${DB_USERNAME:-grocery}
+      DB_MIGRATION_PASSWORD: ${DB_PASSWORD:-grocery}
       REDIS_HOST: redis
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
@@ -87,10 +185,20 @@ services:
       # No default on purpose: the API must not start with a shared, well-known secret
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (at least 64 characters)}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      # Timestamps are stored and logged in UTC everywhere, including the container
+      TZ: UTC
     ports:
       - "8080:8080"
     networks:
       - ecom_network
+    # The app finishes in-flight requests for up to 30s (server.shutdown: graceful);
+    # Docker's default 10s would kill it mid-request.
+    stop_grace_period: 40s
+    deploy:
+      resources:
+        limits:
+          # JAVA_TOOL_OPTIONS sets -XX:MaxRAMPercentage=75, so the heap follows this
+          memory: 1g
     restart: unless-stopped
 
 volumes:
