@@ -19,3 +19,22 @@ app:
   security:
     jwt:
       secret: test-secret-for-junit-only-must-be-at-least-sixty-four-bytes-long-for-hs512
+    # No Redis in tests: the in-memory stores behave the same way for a single instance
+    tokens:
+      store: memory
+    rate-limit:
+      store: memory
+      # High enough that the flow tests are never throttled. The limits themselves are
+      # covered by RateLimitFilterTest and InMemoryRateLimiterTest with their own values.
+      login:
+        limit: 1000
+        window: 1m
+      login-per-account:
+        limit: 1000
+        window: 1m
+      register:
+        limit: 1000
+        window: 1m
+      refresh-token:
+        limit: 1000
+        window: 1m

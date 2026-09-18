@@ -25,8 +25,7 @@ import java.util.UUID;
  *       from the request.</li>
  * </ul>
  *
- * <p>Not built yet: existing access tokens stay valid until they expire, because there
- * is no token deny-list.
+ * <p>All sessions end afterwards, so a leaked token stops working immediately.
  */
 @Slf4j
 @Service
@@ -34,11 +33,14 @@ public class ChangePasswordService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SessionService sessionService;
     private final AuditLog auditLog;
 
-    ChangePasswordService(UserRepository userRepository, PasswordEncoder passwordEncoder, AuditLog auditLog) {
+    ChangePasswordService(UserRepository userRepository, PasswordEncoder passwordEncoder,
+                          SessionService sessionService, AuditLog auditLog) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.sessionService = sessionService;
         this.auditLog = auditLog;
     }
 
@@ -57,5 +59,9 @@ public class ChangePasswordService {
         // Written at commit by dirty checking; no explicit save needed
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
         auditLog.passwordChanged(userId);
+
+        // Someone changing a password often does it because they fear the old one leaked,
+        // so every existing session ends, including this one: the client must log in again
+        sessionService.revokeAllSessions(userId, "password changed");
     }
 }

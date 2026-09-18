@@ -11,8 +11,8 @@ stateless JWT ([ADR-0005](../architecture/adr/0005-stateless-jwt-authentication.
 | Access token TTL | 15 minutes |
 | Refresh token TTL | 7 days |
 | Subject | the user's `public_id` UUID |
-| Access claims | `token_type=access`, `username`, `roles` |
-| Refresh claims | `token_type=refresh` only |
+| Access claims | `token_type=access`, `username`, `roles`, `jti`, `iat_ms` |
+| Refresh claims | `token_type=refresh`, `jti` |
 | Transport | `Authorization: Bearer <token>` |
 
 Rules:
@@ -24,8 +24,60 @@ Rules:
   forged and tampered tokens; keep that coverage when the class changes.
 - Never put anything sensitive in a token. Claims are signed, not encrypted —
   anyone holding a token can read them.
-- Do not lengthen the access-token TTL to work around a client problem. The short
-  TTL is the only thing limiting a stolen token, because there is no revocation.
+- Do not lengthen the access-token TTL to work around a client problem. A short
+  TTL bounds the damage from a stolen token even with revocation in place.
+
+## Revocation
+
+`platform.security.token.TokenRegistry` holds the state that makes stateless
+tokens revocable. `JwtAuthenticationFilter` checks it on every authenticated
+request.
+
+| Event | Effect |
+|-------|--------|
+| `POST /v1/auth/logout` | this access token is refused for the rest of its life; the refresh token sent with it is consumed. Other devices stay logged in. |
+| `POST /v1/auth/logout-all` | every token of the user issued before now is refused |
+| Password change | same as logout-all, so a leaked token stops working |
+| Refresh token used twice | the token leaked or a client is buggy: every session of that user is revoked and `REFRESH_TOKEN_REUSED` is written to the audit log |
+
+Rules:
+
+- Every refresh token works **once**. Using it returns a new pair (rotation).
+- Tokens carry an `iat_ms` claim, because the standard `iat` is only accurate to
+  the second and revocation needs to tell "issued just before the logout" from
+  "issued by logging straight back in".
+- The store is chosen by `app.security.tokens.store`: `redis` (default, shared by
+  every instance) or `memory` (single instance, tests only).
+- Failure policy is deliberate and asymmetric: the access-token check **fails
+  open** if Redis is unreachable, because refusing every request would turn a
+  cache outage into a full outage and the exposure is bounded by the 15-minute
+  TTL. Refresh consumption **fails closed**, because a refresh token buys 7 days
+  of access. Do not "simplify" this to one policy without re-reading this
+  paragraph.
+- Covered by `SessionSecurityIntegrationTest` end to end against PostgreSQL.
+
+## Rate limiting
+
+`platform.ratelimit` limits the public authentication endpoints. The filter runs
+before Spring Security, so a flood of guesses never reaches BCrypt.
+
+| Limit | Default | Key |
+|-------|---------|-----|
+| `app.security.rate-limit.login` | 20 / minute | client address |
+| `app.security.rate-limit.login-per-account` | 10 / 5 minutes | the username or email being tried |
+| `app.security.rate-limit.register` | 5 / 10 minutes | client address |
+| `app.security.rate-limit.refresh-token` | 60 / minute | client address |
+
+- Two layers on purpose: the per-address limit stops one machine, the per-account
+  limit stops a botnet grinding down one account from many addresses.
+- Over the limit returns 429 with code `RATE_LIMITED` and a `Retry-After` header.
+- The counter **fails open** when Redis is down: a limiter that cannot count must
+  not become an outage of login. The failure is logged.
+- A fixed window per key, so a caller can send up to twice the limit across a
+  window boundary. Accepted trade; a sliding window costs more than it is worth here.
+- Client addresses are only trustworthy because `X-Forwarded-For` is honoured
+  solely from configured proxies (see the transport rules above). Do not switch
+  `forward-headers-strategy` back to `framework`.
 
 ## The signing secret
 
@@ -38,8 +90,9 @@ Rules:
   (`JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}`).
 - A different secret per environment, from a secrets manager, never in Git.
   Generate one with `openssl rand -base64 64 | tr -d '\n'`.
-- Rotating the secret invalidates every issued token at once. That is the only
-  available "revoke everything" action.
+- Rotating the secret invalidates every issued token of every user at once, so it
+  is a last resort. For one user, use logout-all; the registry handles that
+  without disturbing anyone else.
 
 ## URL rules
 
@@ -175,10 +228,8 @@ These are real gaps. Do not write code, or documentation, that assumes otherwise
 
 | Gap | Consequence | Likely first step |
 |-----|-------------|-------------------|
-| **No rate limiting** | login, registration and refresh can be called without limit; password guessing is only slowed by BCrypt cost | a Redis counter per IP and per username in front of the auth endpoints |
-| **No token revocation or deny-list** | an access token stays valid for up to 15 minutes after a password change, a role change or the account being disabled; there is no real logout | a Redis deny-list of refresh-token ids, checked on refresh only |
-| **No audit log** | no record of who changed what, or of failed login patterns beyond log lines | an append-only table written in the same transaction as the change |
-| **No account lockout** | repeated failures have no effect | tie to rate limiting rather than a lockout flag, to avoid a denial-of-service against real users |
+| **No database-backed audit trail** | security events go to the `audit` logger, so there is no queryable history and no retention guarantee | an append-only table written in the same transaction as the change |
+| **No admin-initiated password reset or account disable API** | an operator cannot lock an account out from outside the database | an admin endpoint that sets `is_active` and calls logout-all |
 | **No password reset flow** | a user who forgets a password cannot recover it | a single-use, time-limited token sent by email, once `notification` exists |
 | **Email and phone are never verified** | `email_verified` and `phone_verified` exist on `users` and are always false | verification links, once `notification` exists |
 

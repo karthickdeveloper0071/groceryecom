@@ -56,6 +56,28 @@ public class AuditLog {
         record(AuditAction.PASSWORD_CHANGED, userId, Outcome.SUCCESS, "");
     }
 
+    public void loggedOut(UUID userId) {
+        record(AuditAction.LOGGED_OUT, userId, Outcome.SUCCESS, "");
+    }
+
+    /** One device was signed out from the session list. */
+    public void sessionRevoked(UUID userId, UUID sessionId) {
+        record(AuditAction.SESSION_REVOKED, userId, Outcome.SUCCESS, "session=" + sessionId);
+    }
+
+    /** Every session of the user was ended: "sign out everywhere", or a password change. */
+    public void allSessionsRevoked(UUID userId) {
+        record(AuditAction.ALL_SESSIONS_REVOKED, userId, Outcome.SUCCESS, "");
+    }
+
+    /**
+     * A refresh token was presented twice. Either it leaked or a client is buggy; both are
+     * worth investigating, so this is recorded as a failure.
+     */
+    public void refreshTokenReused(UUID userId) {
+        record(AuditAction.REFRESH_TOKEN_REUSED, userId, Outcome.FAILURE, "action=all sessions revoked");
+    }
+
     private void record(AuditAction action, UUID actor, Outcome outcome, String detail) {
         log.info("audit action={} actor={} outcome={} traceId={}{}",
                 action,
@@ -71,7 +93,11 @@ public class AuditLog {
         LOGIN_SUCCEEDED,
         LOGIN_FAILED,
         TOKEN_REFRESHED,
-        PASSWORD_CHANGED
+        REFRESH_TOKEN_REUSED,
+        PASSWORD_CHANGED,
+        LOGGED_OUT,
+        SESSION_REVOKED,
+        ALL_SESSIONS_REVOKED
     }
 
     public enum Outcome {

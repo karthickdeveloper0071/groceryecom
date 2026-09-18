@@ -113,7 +113,6 @@ section is marked as plan or as existing.
 
 Documented as gaps throughout, and collected here so nobody assumes otherwise:
 only the `identity` module exists; RabbitMQ is configured but unused by
-application code; there is no rate limiting and no token revocation (so no real
-logout); security events are written to the `audit` logger but there is no
-database-backed audit trail; nothing uses `IdempotencyGuard` yet; there is no
+application code; security events are written to the `audit` logger but there is
+no database-backed audit trail; nothing uses `IdempotencyGuard` yet; there is no
 distributed tracing, no staging environment and no automated deploy.

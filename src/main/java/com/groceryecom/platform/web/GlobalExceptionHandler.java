@@ -1,6 +1,7 @@
 package com.groceryecom.platform.web;
 
 import com.groceryecom.shared.exception.ApplicationException;
+import com.groceryecom.shared.exception.TooManyRequestsException;
 import com.groceryecom.shared.web.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -35,6 +36,18 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleApplicationException(ApplicationException ex) {
         log.debug("Request failed: {} ({})", ex.getMessage(), ex.getErrorCode());
         return ResponseEntity.status(ex.getStatusCode()).body(ApiResponse.error(ex.getErrorCode(), ex.getMessage()));
+    }
+
+    /**
+     * A limit was reached inside a service (the per-account login limit). The per-address
+     * limits are answered by the rate limit filter, before this handler exists.
+     * {@code Retry-After} tells a well-behaved client when to come back.
+     */
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTooManyRequests(TooManyRequestsException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+                .body(ApiResponse.error(ex.getErrorCode(), ex.getMessage()));
     }
 
     /** Thrown by method security (@PreAuthorize) after the request reached a controller. */

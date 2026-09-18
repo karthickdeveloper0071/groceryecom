@@ -1,12 +1,13 @@
 package com.groceryecom.modules.identity.application;
 
+import com.groceryecom.modules.identity.api.dto.AuthTokenResponse;
 import com.groceryecom.modules.identity.api.dto.RegisterRequest;
 import com.groceryecom.modules.identity.contract.Role;
 import com.groceryecom.modules.identity.contract.UserRegisteredEvent;
+import com.groceryecom.modules.identity.domain.ClientInfo;
 import com.groceryecom.modules.identity.domain.User;
 import com.groceryecom.modules.identity.domain.UserRepository;
 import com.groceryecom.platform.audit.AuditLog;
-import com.groceryecom.platform.security.JwtTokenProvider;
 import com.groceryecom.shared.exception.ConflictException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,12 +20,12 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import java.time.Duration;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -40,7 +41,7 @@ class RegisterCustomerServiceTest {
     private PasswordEncoder passwordEncoder;
 
     @Mock
-    private JwtTokenProvider tokenProvider;
+    private AuthTokenIssuer tokenIssuer;
 
     @Mock
     private ApplicationEventPublisher events;
@@ -50,19 +51,17 @@ class RegisterCustomerServiceTest {
 
     private RegisterCustomerService service() {
         when(passwordEncoder.encode("password123")).thenReturn("{bcrypt}hash");
-        when(tokenProvider.accessTokenTtl()).thenReturn(Duration.ofMinutes(15));
-        return new RegisterCustomerService(userRepository, passwordEncoder, new AuthTokenIssuer(tokenProvider), events, auditLog);
+        when(tokenIssuer.startSession(any(), any()))
+                .thenReturn(AuthTokenResponse.bearer("access", "refresh", 900, null));
+        return new RegisterCustomerService(userRepository, passwordEncoder, tokenIssuer, events, auditLog);
     }
 
     @Test
     void storesLowerCaseCustomerAndPublishesEvent() {
-        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(invocation -> {
-            User saved = invocation.getArgument(0);
-            saved.setPublicId(UUID.randomUUID());
-            return saved;
-        });
+        givenSaveAssignsAPublicId();
 
-        service().execute(new RegisterRequest("  Alice ", "Alice@Example.COM", "password123", "Alice", null, null));
+        service().execute(new RegisterRequest("  Alice ", "Alice@Example.COM", "password123", "Alice", null, null),
+                ClientInfo.UNKNOWN);
 
         ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
         verify(userRepository).saveAndFlush(saved.capture());
@@ -75,31 +74,26 @@ class RegisterCustomerServiceTest {
                 new UserRegisteredEvent(saved.getValue().getPublicId(), "alice@example.com", Role.CUSTOMER));
     }
 
+    /** The device that registered becomes the first session in the user's device list. */
     @Test
-    void returnsTokensAndTheCreatedProfile() {
-        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(invocation -> {
-            User saved = invocation.getArgument(0);
-            saved.setPublicId(UUID.randomUUID());
-            return saved;
-        });
-        when(tokenProvider.createAccessToken(any(), any(), any())).thenReturn("access");
-        when(tokenProvider.createRefreshToken(any())).thenReturn("refresh");
+    void startsASessionForTheNewAccount() {
+        givenSaveAssignsAPublicId();
+        ClientInfo client = new ClientInfo("203.0.113.7", "Mozilla/5.0");
 
-        var response = service().execute(new RegisterRequest("alice", "alice@example.com", "password123", null, null, null));
+        AuthTokenResponse response = service().execute(
+                new RegisterRequest("alice", "alice@example.com", "password123", null, null, null), client);
 
         assertThat(response.accessToken()).isEqualTo("access");
-        assertThat(response.refreshToken()).isEqualTo("refresh");
         assertThat(response.tokenType()).isEqualTo("Bearer");
-        assertThat(response.expiresIn()).isEqualTo(900);
-        assertThat(response.user().role()).isEqualTo("CUSTOMER");
+        verify(tokenIssuer).startSession(any(User.class), eq(client));
     }
 
     @Test
     void duplicateUsernameIsAConflictAndNothingIsSaved() {
         when(userRepository.existsByUsername("alice")).thenReturn(true);
 
-        assertThatThrownBy(() -> service()
-                .execute(new RegisterRequest("ALICE", "a@example.com", "password123", null, null, null)))
+        assertThatThrownBy(() -> service().execute(
+                new RegisterRequest("ALICE", "a@example.com", "password123", null, null, null), ClientInfo.UNKNOWN))
                 .isInstanceOf(ConflictException.class)
                 .hasFieldOrPropertyWithValue("errorCode", "USERNAME_EXISTS")
                 .hasFieldOrPropertyWithValue("statusCode", 409);
@@ -114,8 +108,9 @@ class RegisterCustomerServiceTest {
         when(userRepository.saveAndFlush(any(User.class)))
                 .thenThrow(new DataIntegrityViolationException("duplicate key value violates uk_users_username"));
 
-        assertThatThrownBy(() -> service()
-                .execute(new RegisterRequest("alice", "alice@example.com", "password123", null, null, null)))
+        assertThatThrownBy(() -> service().execute(
+                new RegisterRequest("alice", "alice@example.com", "password123", null, null, null),
+                ClientInfo.UNKNOWN))
                 .isInstanceOf(ConflictException.class)
                 .hasFieldOrPropertyWithValue("errorCode", "ACCOUNT_EXISTS")
                 .hasFieldOrPropertyWithValue("statusCode", 409);
@@ -127,9 +122,17 @@ class RegisterCustomerServiceTest {
     void duplicateEmailIsAConflict() {
         when(userRepository.existsByEmail("a@example.com")).thenReturn(true);
 
-        assertThatThrownBy(() -> service()
-                .execute(new RegisterRequest("alice", "A@Example.com", "password123", null, null, null)))
+        assertThatThrownBy(() -> service().execute(
+                new RegisterRequest("alice", "A@Example.com", "password123", null, null, null), ClientInfo.UNKNOWN))
                 .isInstanceOf(ConflictException.class)
                 .hasFieldOrPropertyWithValue("errorCode", "EMAIL_EXISTS");
+    }
+
+    private void givenSaveAssignsAPublicId() {
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(invocation -> {
+            User saved = invocation.getArgument(0);
+            saved.setPublicId(UUID.randomUUID());
+            return saved;
+        });
     }
 }

@@ -147,6 +147,27 @@ app:
       secret: ${JWT_SECRET:local-development-only-secret-change-me-this-must-be-at-least-64-bytes-long}
       access-token-ttl: 15m
       refresh-token-ttl: 7d
+    tokens:
+      # "redis" shares revocation across instances; "memory" is single-instance only
+      store: ${TOKEN_STORE:redis}
+    rate-limit:
+      enabled: ${RATE_LIMIT_ENABLED:true}
+      # "redis" shares counters across instances; "memory" is single-instance only
+      store: ${RATE_LIMIT_STORE:redis}
+      # Per client address
+      login:
+        limit: 20
+        window: 1m
+      # Per account, across every address: stops a distributed attack on one account
+      login-per-account:
+        limit: 10
+        window: 5m
+      register:
+        limit: 5
+        window: 10m
+      refresh-token:
+        limit: 60
+        window: 1m
     cors:
       # Origin patterns for every frontend: customer app, admin console, vendor storefronts.
       # "*" may replace one host label, so https://*.groceryecom.com covers every vendor

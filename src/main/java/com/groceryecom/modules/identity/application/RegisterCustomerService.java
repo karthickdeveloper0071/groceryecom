@@ -3,6 +3,7 @@ package com.groceryecom.modules.identity.application;
 import com.groceryecom.modules.identity.api.dto.AuthTokenResponse;
 import com.groceryecom.modules.identity.api.dto.RegisterRequest;
 import com.groceryecom.modules.identity.contract.Role;
+import com.groceryecom.modules.identity.domain.ClientInfo;
 import com.groceryecom.modules.identity.contract.UserRegisteredEvent;
 import com.groceryecom.modules.identity.domain.User;
 import com.groceryecom.modules.identity.domain.UserRepository;
@@ -48,7 +49,7 @@ public class RegisterCustomerService {
     }
 
     @Transactional
-    public AuthTokenResponse execute(RegisterRequest request) {
+    public AuthTokenResponse execute(RegisterRequest request, ClientInfo client) {
         String username = UserNormalizer.normalize(request.username());
         String email = UserNormalizer.normalize(request.email());
 
@@ -72,7 +73,7 @@ public class RegisterCustomerService {
         auditLog.registered(saved.getPublicId(), saved.getRole().name());
 
         events.publishEvent(new UserRegisteredEvent(saved.getPublicId(), saved.getEmail(), saved.getRole()));
-        return tokenIssuer.issueFor(saved);
+        return tokenIssuer.startSession(saved, client);
     }
 
     /**

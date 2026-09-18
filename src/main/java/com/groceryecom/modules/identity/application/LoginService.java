@@ -2,9 +2,13 @@ package com.groceryecom.modules.identity.application;
 
 import com.groceryecom.modules.identity.api.dto.AuthTokenResponse;
 import com.groceryecom.modules.identity.api.dto.LoginRequest;
+import com.groceryecom.modules.identity.domain.ClientInfo;
 import com.groceryecom.modules.identity.domain.User;
 import com.groceryecom.modules.identity.domain.UserRepository;
 import com.groceryecom.platform.audit.AuditLog;
+import com.groceryecom.platform.ratelimit.RateLimitProperties;
+import com.groceryecom.platform.ratelimit.RateLimiter;
+import com.groceryecom.shared.exception.TooManyRequestsException;
 import com.groceryecom.shared.exception.UnauthorizedException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -37,22 +41,28 @@ public class LoginService {
     private final PasswordEncoder passwordEncoder;
     private final AuthTokenIssuer tokenIssuer;
     private final AuditLog auditLog;
+    private final RateLimiter rateLimiter;
+    private final RateLimitProperties rateLimits;
 
     /** Compared against when no account matches, to keep the timing indistinguishable. */
     private final String dummyPasswordHash;
 
     LoginService(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthTokenIssuer tokenIssuer,
-                 AuditLog auditLog) {
+                 AuditLog auditLog, RateLimiter rateLimiter, RateLimitProperties rateLimits) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenIssuer = tokenIssuer;
         this.auditLog = auditLog;
+        this.rateLimiter = rateLimiter;
+        this.rateLimits = rateLimits;
         this.dummyPasswordHash = passwordEncoder.encode(UUID.randomUUID().toString());
     }
 
-    @Transactional(readOnly = true)
-    public AuthTokenResponse execute(LoginRequest request) {
+    // Not read-only: a successful login writes a session row
+    @Transactional
+    public AuthTokenResponse execute(LoginRequest request, ClientInfo client) {
         String identifier = UserNormalizer.normalize(request.username());
+        requireAttemptsLeftFor(identifier);
 
         Optional<User> found = identifier.contains("@")
                 ? userRepository.findByEmail(identifier)
@@ -77,6 +87,23 @@ public class LoginService {
         }
 
         auditLog.loginSucceeded(user.getPublicId());
-        return tokenIssuer.issueFor(user);
+        return tokenIssuer.startSession(user, client);
+    }
+
+    /**
+     * A second limit, per account rather than per address. The filter's per-address limit
+     * does not stop a botnet trying one account from thousands of addresses; this does.
+     */
+    private void requireAttemptsLeftFor(String identifier) {
+        if (!rateLimits.enabled()) {
+            return;
+        }
+        RateLimiter.Decision decision = rateLimiter.check("login:account:" + identifier, rateLimits.loginPerAccount());
+        if (!decision.allowed()) {
+            log.info("Login throttled for one account after repeated attempts");
+            throw new TooManyRequestsException(
+                    "Too many login attempts for this account. Try again in " + decision.retryAfterSeconds()
+                            + " seconds.", decision.retryAfterSeconds());
+        }
     }
 }

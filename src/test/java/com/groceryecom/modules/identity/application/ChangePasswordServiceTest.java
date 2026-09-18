@@ -18,6 +18,9 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -34,8 +37,23 @@ class ChangePasswordServiceTest {
     @Mock
     private AuditLog auditLog;
 
+    @Mock
+    private SessionService sessionService;
+
     @InjectMocks
     private ChangePasswordService changePasswordService;
+
+    @Test
+    void endsEverySessionSoALeakedTokenStopsWorking() {
+        User user = user();
+        when(userRepository.findByPublicId(USER_ID)).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("oldPassword1", "{bcrypt}old")).thenReturn(true);
+        when(passwordEncoder.encode("newPassword1")).thenReturn("{bcrypt}new");
+
+        changePasswordService.execute(USER_ID, request("oldPassword1", "newPassword1"));
+
+        verify(sessionService).revokeAllSessions(eq(USER_ID), any());
+    }
 
     @Test
     void storesTheNewHash() {

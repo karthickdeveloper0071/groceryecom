@@ -1,5 +1,6 @@
 package com.groceryecom.platform.security;
 
+import com.groceryecom.platform.security.token.TokenRegistry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,10 +26,12 @@ class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtTokenProvider tokenProvider;
+    private final TokenRegistry tokenRegistry;
     private final WebAuthenticationDetailsSource detailsSource = new WebAuthenticationDetailsSource();
 
-    JwtAuthenticationFilter(JwtTokenProvider tokenProvider) {
+    JwtAuthenticationFilter(JwtTokenProvider tokenProvider, TokenRegistry tokenRegistry) {
         this.tokenProvider = tokenProvider;
+        this.tokenRegistry = tokenRegistry;
     }
 
     @Override
@@ -37,9 +40,15 @@ class JwtAuthenticationFilter extends OncePerRequestFilter {
         String header = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (header != null && header.startsWith(BEARER_PREFIX)) {
             tokenProvider.parseAccessToken(header.substring(BEARER_PREFIX.length()))
+                    .filter(this::notRevoked)
                     .ifPresent(user -> authenticate(user, request));
         }
         filterChain.doFilter(request, response);
+    }
+
+    /** A signed token is not enough: logout, "log out everywhere" and a password change revoke it. */
+    private boolean notRevoked(AuthenticatedUser user) {
+        return !tokenRegistry.isRevoked(user.id(), user.tokenId(), user.sessionId(), user.issuedAt());
     }
 
     private void authenticate(AuthenticatedUser user, HttpServletRequest request) {

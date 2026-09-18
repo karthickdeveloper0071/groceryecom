@@ -8,6 +8,7 @@ import com.groceryecom.modules.identity.application.GetUserService;
 import com.groceryecom.modules.identity.application.LoginService;
 import com.groceryecom.modules.identity.application.RefreshTokenService;
 import com.groceryecom.modules.identity.application.RegisterCustomerService;
+import com.groceryecom.modules.identity.application.SessionService;
 import com.groceryecom.platform.web.RequestIdFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -69,6 +70,9 @@ class SecurityRulesTest extends PostgresIntegrationTest {
     @MockitoBean
     private ChangePasswordService changePasswordService;
 
+    @MockitoBean
+    private SessionService sessionService;
+
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -81,7 +85,7 @@ class SecurityRulesTest extends PostgresIntegrationTest {
 
     @Test
     void loginIsPublic() throws Exception {
-        when(loginService.execute(any())).thenReturn(AuthTokenResponse.bearer("access", "refresh", 900, null));
+        when(loginService.execute(any(), any())).thenReturn(AuthTokenResponse.bearer("access", "refresh", 900, null));
 
         mockMvc.perform(json("/v1/auth/login", "{\"username\":\"alice\",\"password\":\"password123\"}"))
                 .andExpect(status().isOk())
@@ -154,7 +158,7 @@ class SecurityRulesTest extends PostgresIntegrationTest {
 
     @Test
     void refreshTokenIsRejectedAsAccessToken() throws Exception {
-        String refreshToken = tokenProvider.createRefreshToken(ALICE);
+        String refreshToken = tokenProvider.createRefreshToken(ALICE).token();
 
         mockMvc.perform(api(get(CONTEXT_PATH + "/v1/auth/me")).header("Authorization", "Bearer " + refreshToken))
                 .andExpect(status().isUnauthorized());
@@ -220,7 +224,7 @@ class SecurityRulesTest extends PostgresIntegrationTest {
     }
 
     private String accessToken() {
-        return tokenProvider.createAccessToken(ALICE, "alice", List.of("CUSTOMER"));
+        return tokenProvider.createAccessToken(ALICE, UUID.randomUUID(), "alice", List.of("CUSTOMER")).token();
     }
 
     private MockHttpServletRequestBuilder changePassword(String confirmPassword) {

@@ -1,5 +1,7 @@
 package com.groceryecom.platform.security;
 
+import com.groceryecom.platform.ratelimit.RateLimitProperties;
+import com.groceryecom.platform.security.token.TokenRegistry;
 import com.groceryecom.shared.web.ApiResponse;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -35,7 +37,7 @@ import java.util.List;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-@EnableConfigurationProperties({JwtProperties.class, CorsProperties.class})
+@EnableConfigurationProperties({JwtProperties.class, CorsProperties.class, RateLimitProperties.class})
 public class SecurityConfig {
 
     private static final String[] PUBLIC_POST_ENDPOINTS = {
@@ -79,7 +81,8 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtTokenProvider tokenProvider,
-                                                   CorsProperties corsProperties, JsonMapper jsonMapper) {
+                                                   TokenRegistry tokenRegistry, CorsProperties corsProperties,
+                                                   JsonMapper jsonMapper) {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
@@ -101,7 +104,7 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         // Includes a metrics scrape from anywhere else, which then needs a token
                         .anyRequest().authenticated())
-                .addFilterBefore(new JwtAuthenticationFilter(tokenProvider), UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(new JwtAuthenticationFilter(tokenProvider, tokenRegistry), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

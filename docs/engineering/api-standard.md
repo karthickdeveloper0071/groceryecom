@@ -25,7 +25,9 @@ envelope is in
 | POST | `/api/v1/auth/login` | public | 200 |
 | POST | `/api/v1/auth/refresh-token` | public | 200 |
 | GET | `/api/v1/auth/me` | bearer token | 200 |
-| POST | `/api/v1/auth/change-password` | bearer token | 200 |
+| POST | `/api/v1/auth/change-password` | bearer token | 200 (ends every session) |
+| POST | `/api/v1/auth/logout` | bearer token | 200 (this device; send the refresh token in the body) |
+| POST | `/api/v1/auth/logout-all` | bearer token | 200 (every device) |
 
 OpenAPI: `/api/swagger-ui.html` and `/api/v3/api-docs`.
 
@@ -116,6 +118,10 @@ API version.
 | `EMAIL_EXISTS` | 409 | registration, email taken |
 | `INCORRECT_PASSWORD` | 400 | change password, old password wrong |
 | `PASSWORD_UNCHANGED` | 400 | change password, new password equals old |
+| `ACCOUNT_EXISTS` | 409 | registration lost a race on a unique constraint |
+| `CONCURRENT_MODIFICATION` | 409 | optimistic lock failure; reload and retry |
+| `IDEMPOTENT_REQUEST_IN_PROGRESS` | 409 | same `Idempotency-Key` is still being processed |
+| `RATE_LIMITED` | 429 | too many requests; a `Retry-After` header says when to retry |
 
 Adding a business code: define it where the exception is thrown, add a row to
 this table in the same pull request, and use `SCREAMING_SNAKE_CASE`.
