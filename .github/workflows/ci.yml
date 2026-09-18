@@ -2,18 +2,24 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, master ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
+    name: Build, test and analyse
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -22,10 +28,133 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Build and run unit tests
-        run: mvn -B -DskipTests=false -Dspring.profiles.active=test verify
+      # Compiles, runs every test (embedded PostgreSQL, module boundary rules),
+      # runs SpotBugs static analysis and packages the jar
+      - name: Build, test and static analysis
+        run: ./mvnw -B verify
 
-      - name: Package
-        if: success()
-        run: mvn -B -DskipTests=true package
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            target/surefire-reports/
+            target/spotbugsXml.xml
 
+  dependency-scan:
+    name: Dependency vulnerability scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Reports known vulnerabilities in declared dependencies. Fails on HIGH/CRITICAL
+      # so a vulnerable library cannot reach main unnoticed.
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+
+  docker:
+    name: Build Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Proves the image still builds; publishing to a registry comes with the
+      # deployment pipeline, which does not exist yet
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: groceryecom:ci
+
+  # The tests run against an embedded PostgreSQL, which proves the schema but not the
+  # stack: the compose files, the database init scripts, the runtime role's privileges
+  # and the container health checks are only exercised here.
+  stack:
+    name: Docker stack smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Generated per run, never committed: the app refuses a short or shared secret,
+      # and the master key that encrypts stored gateway keys has no default either
+      - name: Generate run-scoped secrets
+        run: |
+          echo "JWT_SECRET=$(openssl rand -base64 64 | tr -d '\n')" >> "$GITHUB_ENV"
+          echo "SECRETS_MASTER_KEY=$(openssl rand -base64 32 | tr -d '\n')" >> "$GITHUB_ENV"
+
+      - name: Compose files are valid
+        run: |
+          docker compose --profile app config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.observability.yml \
+            --profile app --profile observability config --quiet
+
+      # --wait blocks until every health check passes, so a failure here means the
+      # database, Redis or the API never became healthy
+      - name: Start the stack
+        run: docker compose --profile app up -d --build --wait --wait-timeout 300
+
+      - name: The database was initialised as intended
+        run: |
+          set -eux
+          # Flyway ran as the owner and applied every migration
+          docker compose exec -T postgres psql -U grocery -d grocery_ecom -tAc \
+            "SELECT count(*) FROM flyway_schema_history WHERE success" | grep -qE '^[1-9]'
+          # The runtime role exists and is not a superuser
+          docker compose exec -T postgres psql -U grocery -d grocery_ecom -tAc \
+            "SELECT rolsuper FROM pg_roles WHERE rolname = 'grocery_app'" | grep -qx 'f'
+          # pg_stat_statements is available, so slow queries can be traced
+          docker compose exec -T postgres psql -U grocery -d grocery_ecom -tAc \
+            "SELECT count(*) FROM pg_extension WHERE extname = 'pg_stat_statements'" | grep -qx '1'
+
+      - name: The runtime role cannot change the schema
+        run: |
+          if docker compose exec -T postgres psql -U grocery_app -d grocery_ecom \
+               -v ON_ERROR_STOP=1 -c "CREATE TABLE ci_probe (id int)"; then
+            echo "grocery_app was able to create a table; the privileges in ops/postgres/init are wrong"
+            exit 1
+          fi
+          echo "grocery_app was correctly denied DDL"
+
+      - name: The API serves a registration and a login
+        run: |
+          set -eux
+          curl -fsS http://localhost:8080/api/actuator/health | grep -q '"status":"UP"'
+
+          user="ci$(date +%s)"
+          register=$(curl -fsS -X POST http://localhost:8080/api/v1/auth/register \
+            -H 'Content-Type: application/json' \
+            -d "{\"username\":\"$user\",\"email\":\"$user@example.com\",\"password\":\"password123\"}")
+          echo "$register" | jq -e '.success == true and (.data.accessToken | length > 0)'
+
+          login=$(curl -fsS -X POST http://localhost:8080/api/v1/auth/login \
+            -H 'Content-Type: application/json' \
+            -d "{\"username\":\"$user\",\"password\":\"password123\"}")
+          echo "$login" | jq -e '.data.refreshToken | length > 0'
+
+          # Writing through the DML-only role really did reach the database
+          docker compose exec -T postgres psql -U grocery -d grocery_ecom -tAc \
+            "SELECT count(*) FROM user_sessions" | grep -qE '^[1-9]'
+
+      - name: Container logs
+        if: failure()
+        run: docker compose --profile app logs --tail 200
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose --profile app down -v

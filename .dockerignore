@@ -1,0 +1,16 @@
+# Everything the image does not need, and nothing that holds a secret.
+# The build copies only mvnw, .mvn, pom.xml and src.
+.env
+.env.*
+!.env.example
+target/
+logs/
+.git/
+.github/
+.idea/
+.vscode/
+*.iml
+docs/
+ops/
+docker-compose*.yml
+*.md

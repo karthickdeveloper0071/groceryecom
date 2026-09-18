@@ -1,20 +1,17 @@
 package com.groceryecom.shared.exception;
 
 /**
- * Base custom exception for the application
+ * Base for expected business errors. The platform's exception handler turns these
+ * into an error response with the given HTTP status and a stable error code.
+ * Unexpected failures should not use this type; they surface as 500 responses.
  */
-public class ApplicationException extends RuntimeException {
-    private String errorCode;
-    private int statusCode;
+public abstract class ApplicationException extends RuntimeException {
 
-    public ApplicationException(String message, String errorCode, int statusCode) {
+    private final String errorCode;
+    private final int statusCode;
+
+    protected ApplicationException(String message, String errorCode, int statusCode) {
         super(message);
-        this.errorCode = errorCode;
-        this.statusCode = statusCode;
-    }
-
-    public ApplicationException(String message, Throwable cause, String errorCode, int statusCode) {
-        super(message, cause);
         this.errorCode = errorCode;
         this.statusCode = statusCode;
     }
@@ -27,4 +24,3 @@ public class ApplicationException extends RuntimeException {
         return statusCode;
     }
 }
-

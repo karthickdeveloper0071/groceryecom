@@ -1,0 +1,230 @@
+# Defaults work with docker-compose.yml for local development.
+# Every secret or environment-specific value can be overridden with an environment variable.
+
+spring:
+  application:
+    name: groceryecom
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/grocery_ecom}
+    username: ${DB_USERNAME:grocery}
+    password: ${DB_PASSWORD:grocery}
+    hikari:
+      # Per app instance: 8 instances x 20 = 160 connections, within a typical managed Postgres limit
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+      minimum-idle: 5
+      connection-timeout: 30000 # ms (Hikari takes plain milliseconds)
+      max-lifetime: 1800000 # ms
+      data-source-properties:
+        # A runaway query is cancelled instead of holding a connection and a lock forever.
+        # Raise it per query (not globally) if a report legitimately needs longer.
+        options: "-c statement_timeout=10s -c lock_timeout=3s -c idle_in_transaction_session_timeout=30s"
+
+  flyway:
+    # Migrations need DDL, so they connect as the schema owner. The application itself
+    # connects as a DML-only role (see ops/postgres/init/01-runtime-role.sql), which
+    # cannot create or drop anything even if application code tries.
+    # Defaults to the application credentials, so a single-role database still works.
+    user: ${DB_MIGRATION_USERNAME:${DB_USERNAME:grocery}}
+    password: ${DB_MIGRATION_PASSWORD:${DB_PASSWORD:grocery}}
+    # Setting a user gives Flyway its own connection, separate from the Hikari pool.
+    # That is wanted: the pool sets statement_timeout=10s, which is right for a request
+    # and wrong for a migration that builds an index on a large table.
+
+  jpa:
+    # Flyway owns the schema (db/migration); Hibernate only checks that entities match it
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+
+  cache:
+    type: redis
+    redis:
+      time-to-live: 1h
+      key-prefix: "ecom:"
+
+  jackson:
+    default-property-inclusion: non_null
+    time-zone: UTC
+
+  # Java 21 virtual threads: each request gets its own, so waiting on the database or
+  # Redis no longer ties up a platform thread
+  threads:
+    virtual:
+      enabled: true
+
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+  web:
+    resources:
+      # Pure API: unknown paths return a JSON 404 instead of looking for static files
+      add-mappings: false
+
+  modulith:
+    # Only packages annotated with @ApplicationModule are modules (shared, platform, modules.*)
+    detection-strategy: explicitly-annotated
+    events:
+      # Remove outbox entries once every listener has handled the event
+      completion-mode: delete
+
+server:
+  port: ${PORT:8080}
+  servlet:
+    context-path: /api
+  # Never leak internals in error responses; GlobalExceptionHandler builds the body
+  error:
+    include-message: never
+    include-stacktrace: never
+  # Finish in-flight requests before the container stops
+  shutdown: graceful
+  # Trust X-Forwarded-* only when the immediate peer is a proxy we recognise, so a client
+  # cannot forge its own address. "framework" would trust the header from anyone, which
+  # also defeats the private-network rule on the metrics endpoint in SecurityConfig.
+  forward-headers-strategy: native
+  tomcat:
+    remoteip:
+      # Tomcat's default: private ranges. If your load balancer has a public address,
+      # add it here, or client IPs in logs will be the load balancer's.
+      internal-proxies: ${TRUSTED_PROXIES:10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|192\\.168\\.\\d{1,3}\\.\\d{1,3}|169\\.254\\.\\d{1,3}\\.\\d{1,3}|127\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|172\\.1[6-9]{1}\\.\\d{1,3}\\.\\d{1,3}|172\\.2[0-9]{1}\\.\\d{1,3}\\.\\d{1,3}|172\\.3[0-1]{1}\\.\\d{1,3}\\.\\d{1,3}|0:0:0:0:0:0:0:1|::1}
+    # Limits on request size, so a single caller cannot tie up memory
+    max-http-form-post-size: 256KB
+    max-swallow-size: 2MB
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # health and info are public; metrics and prometheus are restricted to
+        # private networks in SecurityConfig, because they describe the system
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  health:
+    # Readiness decides whether the load balancer sends traffic here: only the database
+    # is essential. A Redis outage degrades features (revocation and rate limits fall
+    # back to per-instance memory) but must not take the whole instance out of rotation,
+    # and must never restart it (liveness).
+    readiness:
+      include: readinessState,db
+  metrics:
+    tags:
+      # Every series is labelled with the app, so one dashboard can serve several services later
+      application: ${spring.application.name}
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  distribution:
+    # Histograms let Prometheus compute p95/p99 latency per endpoint
+    percentiles-histogram:
+      http.server.requests: true
+    slo:
+      http.server.requests: 100ms,250ms,500ms,1s,2s
+
+logging:
+  level:
+    root: INFO
+    com.groceryecom: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{traceId:-}] %logger{36} - %msg%n"
+
+app:
+  security:
+    jwt:
+      # Must be at least 64 bytes (HS512). Set JWT_SECRET in every shared or production environment.
+      secret: ${JWT_SECRET:local-development-only-secret-change-me-this-must-be-at-least-64-bytes-long}
+      access-token-ttl: 15m
+      refresh-token-ttl: 7d
+    tokens:
+      # "redis" shares revocation across instances; "memory" is single-instance only
+      store: ${TOKEN_STORE:redis}
+    secrets:
+      # Encrypts the few secrets the platform must store rather than hash: payment
+      # gateway keys today. At least 32 bytes. Set SECRETS_MASTER_KEY in every shared
+      # environment, from a secrets manager; the value below is published in Git and
+      # protects nothing. Rotating it makes stored secrets unreadable, and they have to
+      # be entered again in the admin console - see the security standard.
+      master-key: ${SECRETS_MASTER_KEY:local-development-only-master-key-change-me-32b}
+    rate-limit:
+      enabled: ${RATE_LIMIT_ENABLED:true}
+      # "redis" shares counters across instances; "memory" is single-instance only
+      store: ${RATE_LIMIT_STORE:redis}
+      # Per client address
+      login:
+        limit: 20
+        window: 1m
+      # Per account, across every address: stops a distributed attack on one account
+      login-per-account:
+        limit: 10
+        window: 5m
+      register:
+        limit: 5
+        window: 10m
+      refresh-token:
+        limit: 60
+        window: 1m
+    cors:
+      # Origin patterns for every frontend: customer app, admin console, vendor storefronts.
+      # "*" may replace one host label, so https://*.groceryecom.com covers every vendor
+      # subdomain without a redeploy. Comma-separated. Never "*" alone in a shared environment.
+      allowed-origin-patterns: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+      max-age: 1h
+
+  # Vendor licensing. Commercial policy, so it lives in configuration: the people who
+  # decide how long a late payer keeps selling should not need a release to change their
+  # minds. The plans themselves (prices, limits, trial days) are rows in the plans table,
+  # seeded by V6, because they are data a business edits, not settings an engineer deploys.
+  billing:
+    # Which gateway takes a payment is decided per payment from the credentials an admin
+    # installed in the console, not from configuration: Razorpay once its keys are in,
+    # bank transfer confirmed by an admin until then.
+    provider: ${BILLING_PROVIDER:manual}
+    razorpay:
+      # Only the address is configuration. The keys are entered in the admin console and
+      # stored encrypted, so going live is a screen rather than a deployment. Overridden
+      # in tests to point at a stub instead of the internet.
+      api-url: ${RAZORPAY_API_URL:https://api.razorpay.com}
+    # How long a store keeps selling after its period ends without payment
+    grace-period: ${BILLING_GRACE_PERIOD:3d}
+    expiry-job:
+      enabled: ${BILLING_EXPIRY_JOB_ENABLED:true}
+      # Hourly: nobody should wait until midnight to sell after paying, and nobody should
+      # keep selling all day on a licence that ended this morning
+      cron: "0 5 * * * *"
+
+# ============================================================================
+# Shared and production environments: machine-readable logs, no local defaults
+# ============================================================================
+---
+spring:
+  config:
+    activate:
+      on-profile: staging,prod
+
+logging:
+  structured:
+    # One JSON object per line (Elastic Common Schema), so Loki, Elasticsearch or
+    # CloudWatch can index fields such as log.level, message and trace.id
+    format:
+      console: ecs
+  level:
+    root: INFO
+    com.groceryecom: INFO

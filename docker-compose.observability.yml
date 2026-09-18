@@ -1,0 +1,123 @@
+# Local observability stack: Prometheus (metrics), Loki + Promtail (logs), Grafana (UI).
+# Opt-in overlay on docker-compose.yml, never started on its own: the services join the
+# ecom_network created by the base file and scrape/read the "app" container by name.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.observability.yml \
+#     --profile app --profile observability up -d
+#
+#   docker compose -f docker-compose.yml -f docker-compose.observability.yml \
+#     --profile app --profile observability down
+#
+# Grafana:    http://localhost:3000  (admin / ${GRAFANA_PASSWORD:-admin})
+# Prometheus: http://localhost:9090
+# See ops/README.md.
+
+services:
+  # Scrapes /api/actuator/prometheus on the app container every 15s
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: grocery_ecom_prometheus
+    profiles: ["observability"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    volumes:
+      - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - ecom_network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Log store. Single binary, filesystem storage, 7 day retention.
+  loki:
+    image: grafana/loki:3.3.2
+    container_name: grocery_ecom_loki
+    profiles: ["observability"]
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./ops/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - ecom_network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Reads container stdout from the Docker log files and ships it to Loki
+  promtail:
+    image: grafana/promtail:3.3.2
+    container_name: grocery_ecom_promtail
+    profiles: ["observability"]
+    command: -config.file=/etc/promtail/promtail-config.yml
+    depends_on:
+      loki:
+        condition: service_healthy
+    volumes:
+      - ./ops/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      # Container log files and the metadata needed to turn a container id into a name
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - promtail_data:/tmp/promtail
+    networks:
+      - ecom_network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9080/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Dashboards. Datasources and dashboards are provisioned from ops/grafana, read-only.
+  grafana:
+    image: grafana/grafana:11.5.0
+    container_name: grocery_ecom_grafana
+    profiles: ["observability"]
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      # Local stack: no sign-up, no phoning home, no anonymous access
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - ecom_network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  loki_data:
+  promtail_data:
+  grafana_data:
+
+# Declared identically to docker-compose.yml so the overlay merges instead of
+# creating a second network. Start both files together.
+networks:
+  ecom_network:
+    driver: bridge

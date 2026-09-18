@@ -39,5 +39,15 @@ public abstract class PostgresIntegrationTest {
         registry.add("spring.datasource.url", () -> POSTGRES.getJdbcUrl("postgres", "postgres"));
         registry.add("spring.datasource.username", () -> "postgres");
         registry.add("spring.datasource.password", () -> "postgres");
+        // In Docker and production these differ from the application credentials: Flyway
+        // connects as the schema owner, the application as a DML-only role. The embedded
+        // server has one role, but the separate migration connection is still exercised.
+        registry.add("spring.flyway.user", () -> "postgres");
+        registry.add("spring.flyway.password", () -> "postgres");
+    }
+
+    /** The server itself, for tests that work below the application context. */
+    protected static EmbeddedPostgres postgres() {
+        return POSTGRES;
     }
 }
