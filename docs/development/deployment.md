@@ -68,6 +68,8 @@ development needs none of them.
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | `localhost` / `6379` / empty | |
 | `RABBITMQ_HOST` / `RABBITMQ_PORT` / `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` | `localhost` / `5672` / `guest` / `guest` | Configured but not used by application code yet |
 | `JWT_SECRET` | a local-only value | **Required** outside local development; at least 64 bytes. The app refuses to start with a shorter one. |
+| `SECRETS_MASTER_KEY` | a local-only value | **Required** outside local development; at least 32 bytes. Encrypts the payment gateway keys an admin installs. Changing it makes them unreadable and they must be entered again |
+| `RAZORPAY_API_URL` | `https://api.razorpay.com` | Only the address; the keys are entered in the admin console ([setup](razorpay-setup.md)) |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:5173` | Comma-separated origin **patterns**, e.g. `https://*.groceryecom.com` for every vendor subdomain |
 | `PORT` | `8080` | |
 

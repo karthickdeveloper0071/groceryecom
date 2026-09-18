@@ -36,6 +36,7 @@ comment covers.
 | [0013](0013-least-privilege-database-roles.md) | Least-privilege database roles for the application | Accepted | 2026-09-18 |
 | [0014](0014-vendor-data-isolation.md) | Vendor data isolation enforced in the application, on a shared schema | Accepted | 2026-09-18 |
 | [0015](0015-vendor-subscription-licensing.md) | Vendor licensing as a subscription, enforced by two gates | Accepted | 2026-09-18 |
+| [0016](0016-gateway-credentials-in-the-database.md) | Payment gateway credentials in the database, encrypted, edited by an admin | Accepted | 2026-09-18 |
 
 ## How to add one
 

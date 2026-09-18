@@ -35,10 +35,15 @@ public interface PaymentGateway {
     /**
      * What to show the vendor so the money can be sent.
      *
-     * @param reference    the charge's id, used to confirm it later
+     * @param reference    the charge's id, used to confirm it later. With Razorpay this is
+     *                     the order id the browser and the webhook both quote
      * @param instructions human-readable next step
      * @param redirectUrl  where to send the browser, when the provider has a page; null otherwise
+     * @param publicKey    the gateway's public key, when the frontend opens a checkout
+     *                     widget with it (Razorpay). Null for a provider that needs none.
+     *                     Public by design - it identifies the merchant, it does not
+     *                     authorise anything
      */
-    record PaymentInstruction(String reference, String instructions, String redirectUrl) {
+    record PaymentInstruction(String reference, String instructions, String redirectUrl, String publicKey) {
     }
 }

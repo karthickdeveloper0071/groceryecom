@@ -42,6 +42,10 @@ the index of the ones we have, and how to add one.
 | [0010](architecture/adr/0010-idempotency-strategy.md) | Explicit idempotency guard instead of a transparent filter |
 | [0011](architecture/adr/0011-optimistic-locking.md) | Optimistic locking with `@Version` on `BaseEntity` |
 | [0012](architecture/adr/0012-postgis-in-tests.md) | No PostGIS types in migrations until tests can run PostGIS |
+| [0013](architecture/adr/0013-least-privilege-database-roles.md) | Least-privilege database roles for the application |
+| [0014](architecture/adr/0014-vendor-data-isolation.md) | Vendor data isolation enforced in the application, on a shared schema |
+| [0015](architecture/adr/0015-vendor-subscription-licensing.md) | Vendor licensing as a subscription, enforced by two gates |
+| [0016](architecture/adr/0016-gateway-credentials-in-the-database.md) | Payment gateway credentials in the database, encrypted, edited by an admin |
 
 ## Engineering standards
 
@@ -104,6 +108,10 @@ Docker, how the image is built, the health-check endpoints and why readiness
 excludes Redis and RabbitMQ, the full environment-variable table, what CI does
 and does not do, and production notes.
 
+**[Razorpay setup](development/razorpay-setup.md)** — what to paste where to switch on
+card payments, what the frontend does with the checkout response, the webhook, and a
+symptom-to-fix table.
+
 **[Database operations](development/database-operations.md)** — starting PostgreSQL,
 the owner and runtime roles and why they are split, applying and checking
 migrations, finding a slow query with `pg_stat_statements`, the tuned server
@@ -117,7 +125,10 @@ section is marked as plan or as existing.
 ## Known gaps
 
 Documented as gaps throughout, and collected here so nobody assumes otherwise:
-only the `identity` module exists; RabbitMQ is configured but unused by
-application code; security events are written to the `audit` logger but there is
-no database-backed audit trail; nothing uses `IdempotencyGuard` yet; there is no
-distributed tracing, no staging environment and no automated deploy.
+only the `identity`, `vendor` and `billing` modules exist; RabbitMQ is configured
+but unused by application code; security events are written to the `audit` logger
+but there is no database-backed audit trail; nothing uses `IdempotencyGuard` yet;
+the only payment gateway is Razorpay and it has never run against the real
+Razorpay API; there are no invoices, no proration when changing plan mid-period
+and no renewal reminder emails; there is no distributed tracing, no staging
+environment and no automated deploy.

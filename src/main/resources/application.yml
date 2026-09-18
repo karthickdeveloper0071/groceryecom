@@ -161,6 +161,13 @@ app:
     tokens:
       # "redis" shares revocation across instances; "memory" is single-instance only
       store: ${TOKEN_STORE:redis}
+    secrets:
+      # Encrypts the few secrets the platform must store rather than hash: payment
+      # gateway keys today. At least 32 bytes. Set SECRETS_MASTER_KEY in every shared
+      # environment, from a secrets manager; the value below is published in Git and
+      # protects nothing. Rotating it makes stored secrets unreadable, and they have to
+      # be entered again in the admin console - see the security standard.
+      master-key: ${SECRETS_MASTER_KEY:local-development-only-master-key-change-me-32b}
     rate-limit:
       enabled: ${RATE_LIMIT_ENABLED:true}
       # "redis" shares counters across instances; "memory" is single-instance only
@@ -191,9 +198,15 @@ app:
   # minds. The plans themselves (prices, limits, trial days) are rows in the plans table,
   # seeded by V6, because they are data a business edits, not settings an engineer deploys.
   billing:
-    # "manual" is a bank transfer an admin confirms, which is how a marketplace starts.
-    # A real gateway is one more class implementing PaymentGateway.
+    # Which gateway takes a payment is decided per payment from the credentials an admin
+    # installed in the console, not from configuration: Razorpay once its keys are in,
+    # bank transfer confirmed by an admin until then.
     provider: ${BILLING_PROVIDER:manual}
+    razorpay:
+      # Only the address is configuration. The keys are entered in the admin console and
+      # stored encrypted, so going live is a screen rather than a deployment. Overridden
+      # in tests to point at a stub instead of the internet.
+      api-url: ${RAZORPAY_API_URL:https://api.razorpay.com}
     # How long a store keeps selling after its period ends without payment
     grace-period: ${BILLING_GRACE_PERIOD:3d}
     expiry-job:

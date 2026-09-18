@@ -104,6 +104,19 @@ public class AuditLog {
     }
 
     /**
+     * An admin installed, replaced or switched a payment gateway's keys.
+     *
+     * <p>"Who changed the payment configuration, and when?" is the first question after
+     * money stops arriving. The key <b>hint</b> is recorded - the last four characters of
+     * the public key id - and never the secret.
+     */
+    public void paymentGatewayConfigured(UUID adminId, String provider, String mode,
+                                         String keyIdHint, boolean enabled) {
+        record(AuditAction.PAYMENT_GATEWAY_CONFIGURED, adminId, Outcome.SUCCESS,
+                "provider=%s mode=%s key=%s enabled=%s".formatted(provider, mode, keyIdHint, enabled));
+    }
+
+    /**
      * A refresh token was presented twice. Either it leaked or a client is buggy; both are
      * worth investigating, so this is recorded as a failure.
      */
@@ -134,7 +147,8 @@ public class AuditLog {
         VENDOR_REGISTERED,
         VENDOR_STATUS_CHANGED,
         SUBSCRIPTION_CHANGED,
-        SUBSCRIPTION_PAYMENT_CONFIRMED
+        SUBSCRIPTION_PAYMENT_CONFIRMED,
+        PAYMENT_GATEWAY_CONFIGURED
     }
 
     public enum Outcome {

@@ -200,9 +200,26 @@ before another product, order before taking money. It throws 402 with the date t
 plan ended, so the client shows a renew button rather than an error.
 
 Billing depends on the vendor module's contract, and the vendor module knows nothing
-about billing: one direction, so the two cannot form a cycle. Not built yet: a real
-payment gateway (only bank transfer confirmed by an admin), invoices, proration when
-changing plan mid-period, and an admin UI for plans.
+about billing: one direction, so the two cannot form a cycle.
+
+**Payments.** `PaymentGateway` is a port with two adapters in `infrastructure`:
+Razorpay, and bank transfer confirmed by an admin. Which one takes a payment is
+decided per payment from credentials an admin pasted into the console — installing
+keys switches the platform to cards on the next payment, disabling falls back to
+bank transfer rather than failing checkouts. The keys are stored encrypted with a
+master key held in the environment, and no API ever returns one
+([ADR-0016](adr/0016-gateway-credentials-in-the-database.md), setup in
+[razorpay-setup.md](../development/razorpay-setup.md)).
+
+A licence is granted only by `ConfirmSubscriptionPaymentService`, reached either by
+an admin confirming a transfer or by Razorpay's signed webhook. The browser's own
+"payment succeeded" callback grants nothing: a page can be closed, refreshed or
+faked.
+
+Not built yet: invoices and receipts, proration when changing plan mid-period,
+renewal reminders (they need the notification module), and an admin UI for plan
+prices — a price change is still a migration. The Razorpay adapter has never run
+against the real Razorpay API.
 
 ## Adding a module
 

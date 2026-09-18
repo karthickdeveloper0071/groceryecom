@@ -22,7 +22,9 @@ public final class SensitiveData {
     private static final String SECRET_FIELDS = String.join("|",
             "password", "oldPassword", "newPassword", "confirmPassword",
             "token", "accessToken", "refreshToken", "resetToken",
-            "secret", "clientSecret", "apiKey",
+            // Payment gateway keys an admin pastes: the one request that carries a live
+            // secret, so its exact field names have to be here
+            "secret", "clientSecret", "apiKey", "keySecret", "webhookSecret",
             "cardNumber", "cvv", "pin", "otp");
 
     /** Matches "field": <any JSON scalar>, including numbers, null and strings with escapes. */

@@ -43,7 +43,12 @@ public class SecurityConfig {
     private static final String[] PUBLIC_POST_ENDPOINTS = {
             "/v1/auth/register",
             "/v1/auth/login",
-            "/v1/auth/refresh-token"
+            "/v1/auth/refresh-token",
+            // Payment gateway callbacks. Public because a gateway cannot hold a bearer
+            // token; authenticated instead by an HMAC signature over the raw body, which
+            // the controller verifies before it looks at anything else. A gateway with no
+            // webhook secret configured has every callback refused.
+            "/v1/billing/webhooks/*"
     };
 
     private static final String[] PUBLIC_GET_ENDPOINTS = {

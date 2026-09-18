@@ -3,7 +3,6 @@ package com.groceryecom.modules.billing.infrastructure;
 import com.groceryecom.modules.billing.application.PaymentGateway;
 import com.groceryecom.shared.money.Money;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
@@ -17,13 +16,13 @@ import java.util.UUID;
  * system, so it cannot fail in the ways a gateway can - which is also why the code
  * that settles a payment is written as if it could.
  *
- * <p>A real provider (Stripe, Razorpay, Billplz) is another class implementing
- * {@link PaymentGateway}, plus a webhook endpoint that calls the same confirmation
- * service this admin action calls. Nothing else changes.
+ * <p>Still the fallback once a gateway is configured: if Razorpay has no keys installed,
+ * or an admin switched it off during an outage, PaymentGatewayRegistry routes here rather
+ * than failing a vendor's checkout. A marketplace that cannot take money at all is worse
+ * than one that takes it slowly.
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "app.billing.provider", havingValue = "manual", matchIfMissing = true)
 class ManualPaymentGateway implements PaymentGateway {
 
     private static final String PROVIDER = "MANUAL";
@@ -40,6 +39,6 @@ class ManualPaymentGateway implements PaymentGateway {
         return new PaymentInstruction(reference,
                 ("Transfer %s quoting reference %s. Your plan starts as soon as the payment is "
                         + "confirmed, usually within one business day.").formatted(amount, reference),
-                null);
+                null, null);
     }
 }

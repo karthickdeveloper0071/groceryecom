@@ -184,6 +184,9 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
       # No default on purpose: the API must not start with a shared, well-known secret
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (at least 64 characters)}
+      # Encrypts payment gateway keys stored by an admin. No default, for the same
+      # reason: a shared, well-known key protects nothing.
+      SECRETS_MASTER_KEY: ${SECRETS_MASTER_KEY:?set SECRETS_MASTER_KEY in .env (at least 32 characters)}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
       # Timestamps are stored and logged in UTC everywhere, including the container
       TZ: UTC

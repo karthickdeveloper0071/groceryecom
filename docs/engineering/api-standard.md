@@ -40,6 +40,10 @@ envelope is in
 | POST | `/api/v1/vendors/{vendorId}/subscription` | bearer token, store owner | 200 (choose or change plan; returns payment instructions unless the plan has a trial) |
 | POST | `/api/v1/vendors/{vendorId}/subscription/cancel` | bearer token, store owner | 200 (sells until the paid period ends) |
 | POST | `/api/v1/billing/payments/{reference}/confirm` | bearer token, `ADMIN` | 200 (idempotent: repeating it never buys another period) |
+| POST | `/api/v1/billing/webhooks/razorpay` | public, HMAC-signed by Razorpay | 200 (also for a duplicate or an event we ignore; a non-2xx makes Razorpay retry forever) |
+| GET | `/api/v1/admin/payment-gateways` | bearer token, `ADMIN` | 200 (never returns a secret) |
+| PUT | `/api/v1/admin/payment-gateways/{provider}` | bearer token, `ADMIN` | 200 (install or replace keys) |
+| POST | `/api/v1/admin/payment-gateways/{provider}/enable` / `/disable` | bearer token, `ADMIN` | 200 |
 
 Two kinds of authorisation appear in that table, and they are not interchangeable.
 `ADMIN` is a role, checked with `@PreAuthorize`. "store owner" is a **membership**,
@@ -148,6 +152,9 @@ API version.
 | `SUBSCRIPTION_EXPIRED` | 402 | the plan ran out, grace included. The message carries the date, so show a renew button, not an error page |
 | `SUBSCRIPTION_PLAN_UNCHANGED` | 409 | choosing the plan the store is already on |
 | `SUBSCRIPTION_ALREADY_CANCELLED` | 409 | cancelling twice |
+| `PAYMENT_REFERENCE_IN_USE` | 409 | a gateway reference already belongs to another store |
+| `PAYMENT_GATEWAY_UNAVAILABLE` | 503 | the gateway rejected or did not answer; retry shortly. Its own error text is logged, never returned |
+| `SECRET_UNREADABLE` | 500 | a stored secret cannot be decrypted, usually after SECRETS_MASTER_KEY changed. Re-enter the keys in the admin console |
 
 Adding a business code: define it where the exception is thrown, add a row to
 this table in the same pull request, and use `SCREAMING_SNAKE_CASE`.
